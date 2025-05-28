@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Gemini Enhancer",
+  "version": "1.1",
+  "description": "Ask follow-up questions to Gemini with custom slash commands.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["*://gemini.google.com/*", "*://claude.ai/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ],
+  "action": {
+    "default_title": "Manage Slash Commands",
+    "default_popup": "popup.html"
+  }
+}
