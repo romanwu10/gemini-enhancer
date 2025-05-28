@@ -401,7 +401,7 @@ function showCommandAutocomplete(inputElement, partial, slashIndex) {
     }
     
     // Position the dropdown
-    positionAutocomplete(inputElement, slashIndex);
+    positionAutocomplete(inputElement);
     
     // Populate with matching commands
     commandAutocomplete.innerHTML = matchingCommands.map((cmd, index) => `
@@ -426,29 +426,19 @@ function createAutocompleteDropdown() {
     document.body.appendChild(commandAutocomplete);
 }
 
-function positionAutocomplete(inputElement, slashIndex) {
-    // Try to get caret coordinates for accurate positioning
-    let caret = getCaretCoordinates(inputElement, slashIndex !== undefined ? slashIndex + 1 : undefined);
-    let style = commandAutocomplete.style;
-    let dropdownHeight = commandAutocomplete.offsetHeight || 120; // fallback height
-
-    if (caret) {
-        // Place above the caret
-        style.left = caret.left + 'px';
-        style.top = (caret.top - dropdownHeight - 8) + 'px';
-        style.minWidth = '280px';
-        // If not enough space above, fallback to below
-        if (caret.top - dropdownHeight < 0) {
-            style.top = (caret.bottom + 8) + 'px';
-        }
-    } else {
-        // Fallback: position above the input box
-        const rect = inputElement.getBoundingClientRect();
-        style.left = `${window.scrollX + rect.left}px`;
-        style.top = `${window.scrollY + rect.top - dropdownHeight - 8}px`;
-        if (rect.top - dropdownHeight < 0) {
-            style.top = `${window.scrollY + rect.bottom + 8}px`;
-        }
+function positionAutocomplete(inputElement) {
+    const rect = inputElement.getBoundingClientRect();
+    const style = commandAutocomplete.style;
+    const dropdownHeight = commandAutocomplete.offsetHeight || 160; // fallback height
+    // Place above the input box, spanning its width
+    style.left = `${window.scrollX + rect.left}px`;
+    style.top = `${window.scrollY + rect.top - dropdownHeight - 8}px`;
+    style.width = `${rect.width}px`;
+    style.minWidth = '240px';
+    style.maxWidth = '480px';
+    // If not enough space above, fallback to below
+    if (rect.top - dropdownHeight < 0) {
+        style.top = `${window.scrollY + rect.bottom + 8}px`;
     }
 }
 
