@@ -275,7 +275,7 @@ function insertTextIntoInputBox(text) {
 
 // Monitor input changes for slash commands
 document.addEventListener('input', handleInputChange, true);
-document.addEventListener('keydown', handleKeyDown, true);
+document.addEventListener('keydown', handleKeyDown, { capture: true, passive: false });
 document.addEventListener('click', handleDocumentClick, true);
 
 function handleInputChange(event) {
@@ -308,12 +308,14 @@ function handleKeyDown(event) {
         switch (event.key) {
             case 'ArrowDown':
                 event.preventDefault();
+                event.stopPropagation();
                 selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
                 updateSelection(items, selectedIndex);
                 break;
                 
             case 'ArrowUp':
                 event.preventDefault();
+                event.stopPropagation();
                 selectedIndex = Math.max(selectedIndex - 1, 0);
                 updateSelection(items, selectedIndex);
                 break;
@@ -321,12 +323,17 @@ function handleKeyDown(event) {
             case 'Enter':
             case 'Tab':
                 event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
                 if (selectedIndex >= 0 && items[selectedIndex]) {
                     selectCommand(items[selectedIndex].dataset.command);
                 }
-                break;
+                // Return false to prevent any further processing
+                return false;
                 
             case 'Escape':
+                event.preventDefault();
+                event.stopPropagation();
                 hideCommandAutocomplete();
                 break;
         }
