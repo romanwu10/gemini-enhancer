@@ -56,7 +56,7 @@
 /* Slash Command Autocomplete Styles with Theme Support */
 #slashCommandAutocomplete {
     position: absolute;
-    background: light-dark(white, #2d2d2d);
+    background: light-dark(rgb(241,244,249), rgb(30,31,32));
     border: 1px solid light-dark(#e0e0e0, #404040);
     border-radius: 12px;
     box-shadow: light-dark(0 4px 12px rgba(0,0,0,0.15), 0 4px 12px rgba(0,0,0,0.4));
@@ -81,7 +81,7 @@
 /* Fallback for browsers that don't support light-dark() */
 @media (prefers-color-scheme: dark) {
     #slashCommandAutocomplete {
-        background: #2d2d2d;
+        background: rgb(30,31,32);
         border-color: #404040;
         box-shadow: 0 4px 12px rgba(0,0,0,0.4);
     }
@@ -110,14 +110,14 @@
 
 .autocomplete-item:hover,
 .autocomplete-item.selected {
-    background-color: light-dark(#f8f9fa, #404040);
+    background-color: light-dark(rgb(216,218,233), rgb(54,55,55));
     transform: translateX(4px);
 }
 
 @media (prefers-color-scheme: dark) {
     .autocomplete-item:hover,
     .autocomplete-item.selected {
-        background-color: #404040;
+        background-color: rgb(54,55,55);
     }
 }
 

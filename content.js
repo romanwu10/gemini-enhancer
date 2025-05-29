@@ -276,7 +276,9 @@ function insertTextIntoInputBox(text) {
 // Monitor input changes for slash commands
 document.addEventListener('input', handleInputChange, true);
 document.addEventListener('keydown', handleKeyDown, { capture: true, passive: false });
+document.addEventListener('keyup', handleKeyUp, true);
 document.addEventListener('click', handleDocumentClick, true);
+document.addEventListener('focusout', handleFocusOut, true);
 
 function handleInputChange(event) {
     const target = event.target;
@@ -291,10 +293,25 @@ function handleInputChange(event) {
         const beforeCursor = text.substring(0, cursorPos);
         const slashMatch = beforeCursor.match(/\/(\w*)$/);
         
+        // Debug logging
+        console.log('Input change detected:', {
+            text: text,
+            cursorPos: cursorPos,
+            beforeCursor: beforeCursor,
+            slashMatch: slashMatch,
+            dropdownVisible: commandAutocomplete ? commandAutocomplete.style.display !== 'none' : false
+        });
+        
         if (slashMatch) {
             const partial = slashMatch[1].toLowerCase();
             showCommandAutocomplete(target, partial, slashMatch.index);
         } else {
+            hideCommandAutocomplete();
+        }
+    } else {
+        // If this is not a chat input box but dropdown is visible, hide it
+        if (commandAutocomplete && commandAutocomplete.style.display !== 'none') {
+            console.log('Hiding dropdown because target is not a chat input box');
             hideCommandAutocomplete();
         }
     }
@@ -336,6 +353,41 @@ function handleKeyDown(event) {
                 event.stopPropagation();
                 hideCommandAutocomplete();
                 break;
+                
+            case 'Backspace':
+            case 'Delete':
+                // On deletion keys, we'll let the input event handle the logic
+                // but we can do an immediate check for edge cases
+                console.log('Delete key pressed, will recheck slash command state after input event');
+                break;
+        }
+    }
+}
+
+function handleKeyUp(event) {
+    // Additional check after key release for better responsiveness
+    if (event.target && isChatInputBox(event.target)) {
+        // Small delay to ensure DOM is updated
+        setTimeout(() => {
+            const text = getInputText(event.target);
+            const cursorPos = getCursorPosition(event.target);
+            const beforeCursor = text.substring(0, cursorPos);
+            const slashMatch = beforeCursor.match(/\/(\w*)$/);
+            
+            if (!slashMatch && commandAutocomplete && commandAutocomplete.style.display !== 'none') {
+                console.log('KeyUp: No slash command found, hiding dropdown');
+                hideCommandAutocomplete();
+            }
+        }, 0);
+    }
+}
+
+function handleFocusOut(event) {
+    // Hide dropdown when input loses focus
+    if (commandAutocomplete && commandAutocomplete.style.display !== 'none') {
+        if (!event.relatedTarget || !commandAutocomplete.contains(event.relatedTarget)) {
+            console.log('Focus lost, hiding dropdown');
+            hideCommandAutocomplete();
         }
     }
 }
@@ -378,15 +430,20 @@ function getInputText(element) {
 
 function getCursorPosition(element) {
     if (element.tagName.toLowerCase() === 'textarea' || element.tagName.toLowerCase() === 'input') {
-        return element.selectionStart;
+        return element.selectionStart || 0;
     } else if (element.hasAttribute('contenteditable')) {
         const sel = window.getSelection();
         if (sel.rangeCount > 0) {
-            const range = sel.getRangeAt(0);
-            const preCaretRange = range.cloneRange();
-            preCaretRange.selectNodeContents(element);
-            preCaretRange.setEnd(range.startContainer, range.startOffset);
-            return preCaretRange.toString().length;
+            try {
+                const range = sel.getRangeAt(0);
+                const preCaretRange = range.cloneRange();
+                preCaretRange.selectNodeContents(element);
+                preCaretRange.setEnd(range.startContainer, range.startOffset);
+                return preCaretRange.toString().length;
+            } catch (e) {
+                console.warn('Error getting cursor position:', e);
+                return 0;
+            }
         }
     }
     return 0;
@@ -397,7 +454,25 @@ function showCommandAutocomplete(inputElement, partial, slashIndex) {
         cmd.toLowerCase().startsWith(partial)
     );
     
+    console.log('showCommandAutocomplete called:', {
+        partial: partial,
+        matchingCommands: matchingCommands,
+        slashIndex: slashIndex
+    });
+    
     if (matchingCommands.length === 0) {
+        hideCommandAutocomplete();
+        return;
+    }
+    
+    // Double-check that we still have a valid slash command at cursor position
+    const currentText = getInputText(inputElement);
+    const currentCursorPos = getCursorPosition(inputElement);
+    const currentBeforeCursor = currentText.substring(0, currentCursorPos);
+    const currentSlashMatch = currentBeforeCursor.match(/\/(\w*)$/);
+    
+    if (!currentSlashMatch) {
+        console.log('Slash command no longer valid, hiding dropdown');
         hideCommandAutocomplete();
         return;
     }
@@ -641,7 +716,9 @@ function setCursorPosition(element, position) {
 
 function hideCommandAutocomplete() {
     if (commandAutocomplete) {
+        console.log('Hiding command autocomplete dropdown');
         commandAutocomplete.style.display = 'none';
+        commandAutocomplete.innerHTML = ''; // Clear content to avoid stale state
     }
 }
 
