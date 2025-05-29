@@ -68,6 +68,14 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     backdrop-filter: blur(10px);
     transition: all 0.2s ease;
+    /* Animation for smooth appearance */
+    opacity: 0;
+    transform: translateY(-5px);
+}
+
+#slashCommandAutocomplete[style*="display: block"] {
+    opacity: 1;
+    transform: translateY(0);
 }
 
 /* Fallback for browsers that don't support light-dark() */

@@ -417,6 +417,9 @@ function showCommandAutocomplete(inputElement, partial, slashIndex) {
     });
     
     commandAutocomplete.style.display = 'block';
+    
+    // Re-position after content is populated (for accurate height calculation)
+    setTimeout(() => positionAutocomplete(inputElement), 0);
 }
 
 function createAutocompleteDropdown() {
@@ -427,18 +430,50 @@ function createAutocompleteDropdown() {
 }
 
 function positionAutocomplete(inputElement) {
-    const rect = inputElement.getBoundingClientRect();
     const style = commandAutocomplete.style;
     const dropdownHeight = commandAutocomplete.offsetHeight || 160; // fallback height
-    // Place above the input box, spanning its width
-    style.left = `${window.scrollX + rect.left}px`;
-    style.top = `${window.scrollY + rect.top - dropdownHeight - 8}px`;
-    style.width = `${rect.width}px`;
-    style.minWidth = '240px';
-    style.maxWidth = '480px';
-    // If not enough space above, fallback to below
-    if (rect.top - dropdownHeight < 0) {
-        style.top = `${window.scrollY + rect.bottom + 8}px`;
+    
+    // Get cursor position for precise positioning
+    const cursorPos = getCursorPosition(inputElement);
+    const caretCoords = getCaretCoordinates(inputElement, cursorPos);
+    
+    if (caretCoords) {
+        // Position dropdown so its bottom aligns with the top of cursor line (your approach!)
+        const targetTop = caretCoords.top - dropdownHeight - 2; // small gap
+        
+        style.left = `${caretCoords.left}px`;
+        style.top = `${targetTop}px`;
+        
+        // Handle viewport boundaries
+        const viewportHeight = window.innerHeight;
+        const viewportWidth = window.innerWidth;
+        
+        // If dropdown goes above viewport, position below cursor line instead
+        if (targetTop < window.scrollY + 10) {
+            style.top = `${caretCoords.bottom + 2}px`;
+        }
+        
+        // Ensure dropdown doesn't go off right edge
+        const dropdownWidth = Math.min(480, Math.max(240, viewportWidth * 0.3));
+        if (caretCoords.left + dropdownWidth > viewportWidth) {
+            style.left = `${viewportWidth - dropdownWidth - 10}px`;
+        }
+        
+        style.width = `${dropdownWidth}px`;
+        style.minWidth = '240px';
+        style.maxWidth = '480px';
+    } else {
+        // Fallback to old method if caret coordinates unavailable
+        const rect = inputElement.getBoundingClientRect();
+        style.left = `${window.scrollX + rect.left}px`;
+        style.top = `${window.scrollY + rect.top - dropdownHeight - 8}px`;
+        style.width = `${rect.width}px`;
+        style.minWidth = '240px';
+        style.maxWidth = '480px';
+        
+        if (rect.top - dropdownHeight < 0) {
+            style.top = `${window.scrollY + rect.bottom + 8}px`;
+        }
     }
 }
 
