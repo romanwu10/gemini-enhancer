@@ -64,13 +64,19 @@
     overflow-y: auto;
     z-index: 10000;
     display: none;
-    min-width: 280px;
+    min-width: 112px;
+    max-width: 112px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     backdrop-filter: blur(10px);
     transition: all 0.2s ease;
     /* Animation for smooth appearance */
     opacity: 0;
     transform: translateY(-5px);
+    pointer-events: auto;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
 }
 
 #slashCommandAutocomplete[style*="display: block"] {
@@ -88,13 +94,18 @@
 }
 
 .autocomplete-item {
-    padding: 12px 16px;
+    padding: 8px 12px;
     cursor: pointer;
     border-bottom: 1px solid light-dark(#f0f0f0, #404040);
     transition: all 0.2s ease;
     margin: 0 4px;
     border-radius: 8px;
     margin-bottom: 2px;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    pointer-events: auto;
 }
 
 @media (prefers-color-scheme: dark) {
