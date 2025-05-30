@@ -46,35 +46,67 @@ async function loadSlashCommands() {
 }
 
 document.addEventListener('mouseup', handleTextSelection);
-document.addEventListener('mousedown', clearButtonOnNewSelection);
+document.addEventListener('mousedown', handleMouseDown);
+document.addEventListener('selectionchange', handleSelectionChange);
 
-function clearButtonOnNewSelection(event) {
-    // If the click is not on the button itself, and a button exists, remove it.
-    if (followUpButton && event.target !== followUpButton) {
+function handleMouseDown(event) {
+    // If clicking on the follow-up button, don't remove it
+    if (followUpButton && followUpButton.contains(event.target)) {
+        return;
+    }
+    
+    // If there's a follow-up button and we're clicking elsewhere, remove it
+    // This handles the case where user clicks to position cursor elsewhere
+    if (followUpButton) {
         removeFollowUpButton();
+    }
+}
+
+function handleSelectionChange() {
+    // This fires whenever the selection changes, including when it's cleared
+    const selectedText = window.getSelection().toString().trim();
+    
+    // If no text is selected and we have a button, remove it
+    if (!selectedText && followUpButton) {
+        removeFollowUpButton();
+        return;
+    }
+    
+    // If we have selected text and a button exists, update the button position
+    if (selectedText && followUpButton) {
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            
+            // Update button position
+            followUpButton.style.left = `${window.scrollX + rect.left}px`;
+            followUpButton.style.top = `${window.scrollY + rect.top - 36}px`;
+        }
     }
 }
 
 function handleTextSelection(event) {
     const selectedText = window.getSelection().toString().trim();
 
-    if (followUpButton && event.target === followUpButton) {
-        // Click was on the button itself, let its own handler manage it.
+    // If clicking on the follow-up button, don't interfere
+    if (followUpButton && followUpButton.contains(event.target)) {
         return;
     }
 
-    // Remove any existing button if text is deselected or new selection is made
-    if (followUpButton && selectedText === '') {
+    // Remove existing button first
+    if (followUpButton) {
         removeFollowUpButton();
-        return;
     }
 
+    // Create new button if we have selected text
     if (selectedText) {
-        // If a button already exists, remove it before creating a new one
-        if (followUpButton) {
-            removeFollowUpButton();
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            createFollowUpButton(selectedText, rect.left, rect.top);
         }
-        createFollowUpButton(selectedText, event.clientX, event.clientY);
     }
 }
 
@@ -764,10 +796,5 @@ function hideCommandAutocomplete() {
     }
 }
 
-// Listen for clicks outside the button to remove it
-document.addEventListener('click', function(event) {
-    if (followUpButton && !followUpButton.contains(event.target) && window.getSelection().toString().trim() === '') {
-        removeFollowUpButton();
-    }
-}, true); // Use capture phase to catch clicks early
+
 
