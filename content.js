@@ -383,18 +383,30 @@ function handleKeyUp(event) {
 }
 
 function handleFocusOut(event) {
-    // Hide dropdown when input loses focus
+    // Hide dropdown when input loses focus, but with a delay to allow click events
     if (commandAutocomplete && commandAutocomplete.style.display !== 'none') {
         if (!event.relatedTarget || !commandAutocomplete.contains(event.relatedTarget)) {
-            console.log('Focus lost, hiding dropdown');
-            hideCommandAutocomplete();
+            console.log('Focus lost, hiding dropdown with delay');
+            setTimeout(() => {
+                if (commandAutocomplete && commandAutocomplete.style.display !== 'none') {
+                    hideCommandAutocomplete();
+                }
+            }, 200); // Small delay to allow click events to process
         }
     }
 }
 
 function handleDocumentClick(event) {
-    if (commandAutocomplete && !commandAutocomplete.contains(event.target)) {
-        hideCommandAutocomplete();
+    if (commandAutocomplete && commandAutocomplete.style.display !== 'none') {
+        // If clicking on an autocomplete item, let it handle the selection
+        if (commandAutocomplete.contains(event.target)) {
+            return;
+        }
+        
+        // If clicking outside the dropdown and not on the input box, hide dropdown
+        if (!commandAutocomplete.contains(event.target) && !isChatInputBox(event.target)) {
+            hideCommandAutocomplete();
+        }
     }
 }
 
@@ -489,13 +501,23 @@ function showCommandAutocomplete(inputElement, partial, slashIndex) {
     commandAutocomplete.innerHTML = matchingCommands.map((cmd, index) => `
         <div class="autocomplete-item ${index === 0 ? 'selected' : ''}" data-command="${cmd}">
             <div class="command-name">/${cmd}</div>
-            <div class="command-preview">${slashCommands[cmd]}</div>
         </div>
     `).join('');
     
-    // Add click handlers
+    // Add click handlers with proper event handling
     commandAutocomplete.querySelectorAll('.autocomplete-item').forEach(item => {
-        item.addEventListener('click', () => selectCommand(item.dataset.command));
+        item.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            selectCommand(item.dataset.command);
+        }, { capture: true });
+        
+        // Also add mousedown handler as backup
+        item.addEventListener('mousedown', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            selectCommand(item.dataset.command);
+        }, { capture: true });
     });
     
     commandAutocomplete.style.display = 'block';
@@ -536,22 +558,22 @@ function positionAutocomplete(inputElement) {
         }
         
         // Ensure dropdown doesn't go off right edge
-        const dropdownWidth = Math.min(480, Math.max(240, viewportWidth * 0.3));
+        const dropdownWidth = 150; // Fixed width - 40% of original 280px
         if (caretCoords.left + dropdownWidth > viewportWidth) {
             style.left = `${viewportWidth - dropdownWidth - 10}px`;
         }
         
         style.width = `${dropdownWidth}px`;
-        style.minWidth = '240px';
-        style.maxWidth = '480px';
+        style.minWidth = '150px';
+        style.maxWidth = '150px';
     } else {
         // Fallback to old method if caret coordinates unavailable
         const rect = inputElement.getBoundingClientRect();
         style.left = `${window.scrollX + rect.left}px`;
         style.top = `${window.scrollY + rect.top - dropdownHeight - 8}px`;
-        style.width = `${rect.width}px`;
-        style.minWidth = '240px';
-        style.maxWidth = '480px';
+        style.width = '150px';
+        style.minWidth = '150px';
+        style.maxWidth = '240px';
         
         if (rect.top - dropdownHeight < 0) {
             style.top = `${window.scrollY + rect.bottom + 8}px`;
@@ -639,7 +661,12 @@ function updateSelection(items, selectedIndex) {
 }
 
 function selectCommand(commandName) {
+    console.log('selectCommand called with:', commandName);
+    console.log('lastInputBox:', lastInputBox);
+    console.log('slashCommands[commandName]:', slashCommands[commandName]);
+    
     if (!lastInputBox || !slashCommands[commandName]) {
+        console.log('Cannot select command - missing input box or command');
         hideCommandAutocomplete();
         return;
     }
@@ -647,13 +674,21 @@ function selectCommand(commandName) {
     const text = getInputText(lastInputBox);
     const cursorPos = getCursorPosition(lastInputBox);
     
+    console.log('Current text:', text);
+    console.log('Cursor position:', cursorPos);
+    
     // Find the slash command in the text
     const beforeCursor = text.substring(0, cursorPos);
     const slashMatch = beforeCursor.match(/\/(\w*)$/);
     
+    console.log('Slash match:', slashMatch);
+    
     if (slashMatch) {
         const commandPrompt = slashCommands[commandName];
         const selectedText = window.getSelection().toString().trim();
+        
+        console.log('Command prompt:', commandPrompt);
+        console.log('Selected text:', selectedText);
         
         // Replace {text} placeholder with selected text
         const finalPrompt = commandPrompt.replace(/\{text\}/g, selectedText || '');
@@ -661,12 +696,19 @@ function selectCommand(commandName) {
         // Replace the slash command with the prompt
         const newText = text.substring(0, slashMatch.index) + finalPrompt + text.substring(cursorPos);
         
+        console.log('Final prompt:', finalPrompt);
+        console.log('New text:', newText);
+        
         // Update the input
         setInputText(lastInputBox, newText);
         
         // Position cursor after the inserted text
         const newCursorPos = slashMatch.index + finalPrompt.length;
         setCursorPosition(lastInputBox, newCursorPos);
+        
+        console.log('Command selection completed successfully');
+    } else {
+        console.log('No slash match found in text');
     }
     
     hideCommandAutocomplete();
