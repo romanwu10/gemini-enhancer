@@ -13,7 +13,8 @@
     {
       "matches": ["*://gemini.google.com/*", "*://claude.ai/*"],
       "js": ["content.js"],
-      "css": ["styles.css"]
+      "css": ["styles.css"],
+      "run_at": "document_end"
     }
   ],
   "browser_action": {
@@ -24,5 +25,10 @@
     "safari": {
       "strict_min_version": "14.0"
     }
-  }
+  },
+  "web_accessible_resources": [
+    "*.png",
+    "*.jpg", 
+    "*.svg"
+  ]
 }

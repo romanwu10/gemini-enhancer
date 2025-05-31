@@ -1,4 +1,8 @@
 // Popup script for managing slash commands
+
+// Safari compatibility: Use browser API if available, fallback to chrome
+const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
+
 document.addEventListener('DOMContentLoaded', async function() {
     const commandsList = document.getElementById('commandsList');
     const addCommandBtn = document.getElementById('addCommand');
@@ -22,7 +26,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     async function loadCommands() {
         try {
-            const result = await chrome.storage.sync.get(['slashCommands']);
+            const result = await browserAPI.storage.sync.get(['slashCommands']);
             const commands = result.slashCommands || {};
             
             displayCommands(commands);
@@ -69,13 +73,13 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
         
         try {
-            const result = await chrome.storage.sync.get(['slashCommands']);
+            const result = await browserAPI.storage.sync.get(['slashCommands']);
             const commands = result.slashCommands || {};
             
             const isUpdate = commands[trigger];
             commands[trigger] = prompt;
             
-            await chrome.storage.sync.set({ slashCommands: commands });
+            await browserAPI.storage.sync.set({ slashCommands: commands });
             
             // Clear inputs
             triggerInput.value = '';
@@ -99,12 +103,12 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
         
         try {
-            const result = await chrome.storage.sync.get(['slashCommands']);
+            const result = await browserAPI.storage.sync.get(['slashCommands']);
             const commands = result.slashCommands || {};
             
             delete commands[trigger];
             
-            await chrome.storage.sync.set({ slashCommands: commands });
+            await browserAPI.storage.sync.set({ slashCommands: commands });
             
             // Show success message
             showNotification(`Deleted /${trigger}`, 'success');
