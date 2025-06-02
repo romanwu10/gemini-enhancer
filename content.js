@@ -191,26 +191,6 @@ function insertTextIntoInputBox(text) {
             }
         }
 
-    } else if (hostname.includes('claude.ai')) {
-        // Updated selectors for Claude.ai
-        const claudeSelectors = [
-            'div[contenteditable="true"][role="textbox"]', // Most common for Claude
-            'div[contenteditable="true"][aria-multiline="true"]',
-            'textarea[placeholder*="Message Claude"]',
-            'div[data-placeholder*="Message Claude"]',
-            'div[contenteditable="true"][data-placeholder]',
-            'div.ProseMirror[contenteditable="true"]', // ProseMirror editor
-            '*[contenteditable="true"]' // Very broad fallback
-        ];
-        
-        for (const selector of claudeSelectors) {
-            inputBox = document.querySelector(selector);
-            if (inputBox) {
-                selectorUsed = selector;
-                console.log(`Claude.ai input box found with selector: ${selector}`);
-                break;
-            }
-        }
     }
 
     // Ultimate fallback - try any contenteditable or textarea
@@ -286,12 +266,13 @@ function insertTextIntoInputBox(text) {
                 console.warn("textarea/input method failed:", e);
             }
         }
-        // Clipboard fallback
+        // Modern clipboard API fallback
         if (!success) {
             try {
                 navigator.clipboard.writeText(citationText).then(() => {
                     inputBox.focus();
-                    document.execCommand('paste');
+                    // Suggest manual paste to user since execCommand is deprecated
+                    console.log("Text copied to clipboard. You can paste it manually with Ctrl+V or Cmd+V");
                 });
                 success = true;
             } catch (e) {
@@ -452,12 +433,6 @@ function isChatInputBox(element) {
         return element.matches('div[contenteditable="true"][role="textbox"]') ||
                element.matches('rich-textarea div[contenteditable="true"]') ||
                element.matches('textarea[placeholder*="Enter a prompt"]');
-    }
-    
-    if (hostname.includes('claude.ai')) {
-        return element.matches('div[contenteditable="true"][role="textbox"]') ||
-               element.matches('div[contenteditable="true"][aria-multiline="true"]') ||
-               element.matches('textarea[placeholder*="Message Claude"]');
     }
     
     // Fallback for any contenteditable or textarea that looks like a chat input

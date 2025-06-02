@@ -211,26 +211,6 @@ function insertTextIntoInputBox(text) {
             if (inputBox) break;
         }
 
-    } else if (hostname.includes('claude.ai')) {
-        const claudeSelectors = [
-            'div[contenteditable="true"][role="textbox"]:not([aria-hidden="true"])',
-            'div[contenteditable="true"][aria-multiline="true"]:not([aria-hidden="true"])',
-            'textarea[placeholder*="Message Claude"]:not([style*="display: none"])',
-            'div.ProseMirror[contenteditable="true"]:not([aria-hidden="true"])',
-            'div[contenteditable="true"]:not([aria-hidden="true"]):not([role="button"])'
-        ];
-        
-        for (const selector of claudeSelectors) {
-            const elements = document.querySelectorAll(selector);
-            for (const element of elements) {
-                if (isVisibleAndInteractable(element)) {
-                    inputBox = element;
-                    selectorUsed = selector;
-                    break;
-                }
-            }
-            if (inputBox) break;
-        }
     }
 
     if (inputBox) {
@@ -420,12 +400,6 @@ function isChatInputBox(element) {
         return element.matches('div[contenteditable="true"][role="textbox"]') ||
                element.matches('rich-textarea div[contenteditable="true"]') ||
                element.matches('textarea[placeholder*="Enter a prompt"]');
-    }
-    
-    if (hostname.includes('claude.ai')) {
-        return element.matches('div[contenteditable="true"][role="textbox"]') ||
-               element.matches('div[contenteditable="true"][aria-multiline="true"]') ||
-               element.matches('textarea[placeholder*="Message Claude"]');
     }
     
     return element.matches('div[contenteditable="true"]') ||

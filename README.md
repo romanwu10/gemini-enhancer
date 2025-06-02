@@ -1,6 +1,8 @@
 # Gemini Enhancer
 
-A Chrome extension that enhances your experience with AI chat interfaces like Gemini and Claude by providing follow-up capabilities and custom slash commands. Features automatic dark/light theme support that syncs with your system preferences.
+A Chrome extension that enhances your experience with AI chat interfaces like Gemini by providing follow-up capabilities and custom slash commands. Features automatic dark/light theme support that syncs with your system preferences.
+
+**Updated to Manifest V3** for continued Chrome support through 2025 and beyond.
 
 ## Features
 
@@ -10,7 +12,7 @@ A Chrome extension that enhances your experience with AI chat interfaces like Ge
 - **Responsive Layout**: Optimized for different screen sizes and browser zoom levels
 
 ### 1. Follow-up Helper
-- Select any text on Gemini or Claude.ai
+- Select any text on Gemini
 - Click the stylish "Follow-up" button that appears
 - Automatically inserts the selected text as a quoted citation in the chat input
 
@@ -64,7 +66,7 @@ Click the extension icon to open the Slash Commands manager where you can:
 2. Open Chrome and go to `chrome://extensions/`
 3. Enable "Developer mode" in the top right
 4. Click "Load unpacked" and select the extension folder
-5. The extension will be active on Gemini and Claude.ai
+5. The extension will be active on Gemini
 
 ## Permissions
 
@@ -75,20 +77,20 @@ Click the extension icon to open the Slash Commands manager where you can:
 ## Compatibility
 
 - **Gemini**: gemini.google.com
-- **Claude**: claude.ai
 - Works with various input types (contenteditable divs, textareas)
 
 ## Development
 
 The extension consists of:
 
-- `manifest.json` - Extension configuration
+- `manifest.json` - Extension configuration (Manifest V3)
 - `content.js` - Main functionality for both features
 - `popup.html/js` - Slash command management interface
 - `styles.css` - Styling for UI elements
 
 ## Version History
 
+- **v1.2** - Updated to Manifest V3, removed Claude.ai support, improved clipboard API usage
 - **v1.1** - Added slash commands feature with autocomplete
 - **v1.0** - Initial release with follow-up helper
 

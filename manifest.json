@@ -1,28 +1,24 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "Gemini Enhancer",
-  "version": "1.1",
+  "version": "1.2",
   "description": "Ask follow-up questions to Gemini with custom slash commands.",
   "permissions": [
     "activeTab",
-    "storage",
-    "*://gemini.google.com/*",
-    "*://claude.ai/*"
+    "storage"
+  ],
+  "host_permissions": [
+    "*://gemini.google.com/*"
   ],
   "content_scripts": [
     {
-      "matches": ["*://gemini.google.com/*", "*://claude.ai/*"],
+      "matches": ["*://gemini.google.com/*"],
       "js": ["content.js"],
       "css": ["styles.css"]
     }
   ],
-  "browser_action": {
+  "action": {
     "default_title": "Manage Slash Commands",
     "default_popup": "popup.html"
-  },
-  "browser_specific_settings": {
-    "safari": {
-      "strict_min_version": "14.0"
-    }
   }
 }

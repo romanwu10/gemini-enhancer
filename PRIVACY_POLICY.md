@@ -49,7 +49,7 @@ Gemini Enhancer is a Chrome extension that enhances your experience with AI chat
 The extension requests the following permissions:
 
 **activeTab:**
-- Used to interact with the currently active AI chat website (Gemini, Claude)
+- Used to interact with the currently active AI chat website (Gemini)
 - Allows the extension to detect text selections and insert follow-up text
 - Does not access content from other tabs or websites
 
@@ -66,7 +66,7 @@ The extension requests the following permissions:
 ### Website Interaction
 
 **Supported Websites:**
-- The extension only operates on gemini.google.com and claude.ai
+- The extension only operates on gemini.google.com
 - It detects text selections and chat input boxes on these sites
 - No data from these interactions is collected or stored remotely
 

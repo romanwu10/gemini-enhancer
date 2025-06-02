@@ -1,6 +1,6 @@
 # Gemini Enhancer - Safari Extension
 
-A Safari browser extension that enhances your experience with AI chat interfaces like Gemini and Claude by adding custom slash commands and follow-up functionality.
+A Safari browser extension that enhances your experience with AI chat interfaces like Gemini by adding custom slash commands and follow-up functionality.
 
 ## Safari-Specific Features
 
@@ -43,7 +43,7 @@ Gemini-Enhancer-Safari/
 ## Features
 
 ### 1. Follow-up Button
-- **Selection Enhancement**: Select any text on Gemini or Claude
+- **Selection Enhancement**: Select any text on Gemini
 - **Quick Citation**: Automatically formats selected text as a citation
 - **Safari Optimized**: Smooth animations and native-feeling interactions
 
@@ -103,7 +103,6 @@ Gemini-Enhancer-Safari/
 
 ### Website Compatibility
 - **Gemini (gemini.google.com)**: Full support
-- **Claude (claude.ai)**: Full support
 - **Other sites**: Basic functionality may work
 
 ## Privacy & Security
@@ -116,7 +115,7 @@ Gemini-Enhancer-Safari/
 ### Permissions
 - **activeTab**: Required to interact with chat interfaces
 - **storage**: Required to save custom commands
-- **Host permissions**: Limited to Gemini and Claude domains
+- **Host permissions**: Limited to Gemini domains
 
 ### Safari Security Features
 - Follows Safari's enhanced security model
