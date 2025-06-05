@@ -17,6 +17,20 @@ browserAPI.storage.onChanged.addListener((changes, namespace) => {
         slashCommands = changes.slashCommands.newValue || {};
         console.log('Slash commands updated:', slashCommands);
     }
+    // Listen for changes to autosaved text (e.g., cleared by popup)
+    if (namespace === 'local' && changes.autosavedContent) {
+        if (!changes.autosavedContent.newValue) {
+            const currentUrl = window.location.href;
+            const inputField = findGeminiInputBox();
+            if (inputField && localStorage.getItem('autosave_last_cleared_url') === currentUrl) {
+                // Potentially clear the input field if the saved data was cleared for this URL
+                // and the user hasn't typed anything new yet.
+                // However, this might be too aggressive. For now, we'll just log.
+                console.log('Autosaved content cleared for this page.');
+                localStorage.removeItem('autosave_last_cleared_url');
+            }
+        }
+    }
 });
 
 async function loadSlashCommands() {
@@ -51,6 +65,147 @@ async function loadSlashCommands() {
 document.addEventListener('mouseup', handleTextSelection);
 document.addEventListener('mousedown', handleMouseDown);
 document.addEventListener('selectionchange', handleSelectionChange);
+
+// --- AUTOSAVE FEATURE ---
+const AUTOSAVE_STORAGE_KEY = 'autosavedContent_gemini';
+const AUTOSAVE_DEBOUNCE_MS = 2000;
+let autosaveTimeout = null;
+let lastRestoredUrl = null;
+let lastInputField = null;
+let observer = null;
+let lastKnownUrl = location.href;
+let urlPollInterval = null;
+
+function findGeminiInputBox() {
+    const selectors = [
+        '#prompt-textarea',
+        'textarea[aria-label*="Prompt"]',
+        'textarea[aria-label*="Message"]',
+        'textarea[placeholder*="Message"]',
+        'textarea[data-testid*="chat-input"]',
+        'div[role="textbox"][aria-label*="Send a message"]',
+        'div[role="textbox"][aria-label*="Prompt"]',
+        '.input-box[contenteditable="true"]',
+        'textarea',
+        'div[role="textbox"]'
+    ];
+    for (let selector of selectors) {
+        const elem = document.querySelector(selector);
+        if (elem && elem.offsetParent !== null && elem.offsetHeight > 0 && elem.offsetWidth > 0) {
+            return elem;
+        }
+    }
+    return null;
+}
+
+function attachAutosave(inputField) {
+    if (!inputField) return;
+    if (lastInputField === inputField) return; // Already attached
+    if (lastInputField) {
+        lastInputField.removeEventListener('input', handleAutosaveInput);
+        lastInputField.removeEventListener('keyup', handleAutosaveInput);
+    }
+    lastInputField = inputField;
+    inputField.addEventListener('input', handleAutosaveInput);
+    inputField.addEventListener('keyup', handleAutosaveInput);
+}
+
+async function saveInputContent() {
+    const inputField = lastInputField || findGeminiInputBox();
+    if (!inputField) return;
+    const currentUrl = window.location.href;
+    const textToSave = inputField.tagName === 'TEXTAREA' || inputField.tagName === 'INPUT' ? inputField.value : inputField.innerText;
+    if (textToSave.trim() === '') {
+        const savedData = await browserAPI.storage.local.get(AUTOSAVE_STORAGE_KEY);
+        if (savedData[AUTOSAVE_STORAGE_KEY] && savedData[AUTOSAVE_STORAGE_KEY].url === currentUrl) {
+            await browserAPI.storage.local.remove(AUTOSAVE_STORAGE_KEY);
+        }
+        return;
+    }
+    const dataToStore = { url: currentUrl, text: textToSave, timestamp: Date.now() };
+    await browserAPI.storage.local.set({ [AUTOSAVE_STORAGE_KEY]: dataToStore });
+}
+
+function handleAutosaveInput() {
+    clearTimeout(autosaveTimeout);
+    autosaveTimeout = setTimeout(saveInputContent, AUTOSAVE_DEBOUNCE_MS);
+}
+
+async function restoreInputContent(inputField) {
+    if (!inputField) return;
+    const currentUrl = window.location.href;
+    if (lastRestoredUrl === currentUrl) return;
+    const result = await browserAPI.storage.local.get(AUTOSAVE_STORAGE_KEY);
+    const savedData = result[AUTOSAVE_STORAGE_KEY];
+    if (savedData && savedData.url === currentUrl && savedData.text) {
+        if (inputField.tagName === 'TEXTAREA' || inputField.tagName === 'INPUT') {
+            inputField.value = savedData.text;
+        } else {
+            inputField.innerText = savedData.text;
+        }
+        inputField.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+        inputField.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+        lastRestoredUrl = currentUrl;
+    }
+}
+
+function observeInputBox() {
+    if (observer) observer.disconnect();
+    observer = new MutationObserver(() => {
+        const inputField = findGeminiInputBox();
+        if (inputField) {
+            attachAutosave(inputField);
+            restoreInputContent(inputField);
+        }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    // Initial check
+    const inputField = findGeminiInputBox();
+    if (inputField) {
+        attachAutosave(inputField);
+        restoreInputContent(inputField);
+    }
+}
+
+function onUrlChange() {
+    if (lastKnownUrl !== location.href) {
+        lastKnownUrl = location.href;
+        lastRestoredUrl = null;
+        observeInputBox();
+    } else {
+        // Even if URL didn't change, try to restore if input is present and not restored
+        const inputField = findGeminiInputBox();
+        if (inputField) restoreInputContent(inputField);
+    }
+}
+
+function startUrlPolling() {
+    if (urlPollInterval) clearInterval(urlPollInterval);
+    urlPollInterval = setInterval(onUrlChange, 500); // Check every 500ms
+}
+
+function hookHistoryEvents() {
+    const pushState = history.pushState;
+    history.pushState = function() {
+        pushState.apply(this, arguments);
+        setTimeout(onUrlChange, 100);
+    };
+    window.addEventListener('popstate', onUrlChange);
+    window.addEventListener('hashchange', onUrlChange);
+}
+
+if (document.readyState === 'complete') {
+    observeInputBox();
+    hookHistoryEvents();
+    startUrlPolling();
+} else {
+    window.addEventListener('load', () => {
+        observeInputBox();
+        hookHistoryEvents();
+        startUrlPolling();
+    });
+}
+// --- END AUTOSAVE FEATURE ---
 
 function handleMouseDown(event) {
     // If clicking on the follow-up button, don't remove it
