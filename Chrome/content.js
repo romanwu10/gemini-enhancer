@@ -4,12 +4,210 @@ let followUpButton = null;
 let slashCommands = {};
 let commandAutocomplete = null;
 let lastInputBox = null;
+let selectionTimeout = null;
+let lastSelectedText = '';
+let buttonStabilityTimeout = null;
+let isHoveringButton = false;
+
+// Wide mode variables
+let wideModeEnabled = false;
+let wideModeWidth = 1200;
+let wideModeApplied = false;
+let wideModeInterval = null;
+
+// Function to determine if selected text is from AI response vs user input
+function isSelectionFromAIResponse(selection) {
+    if (!selection || selection.rangeCount === 0) return false;
+    
+    const range = selection.getRangeAt(0);
+    const container = range.commonAncestorContainer;
+    
+    // Find the closest parent element that might indicate content type
+    let element = container.nodeType === Node.TEXT_NODE ? container.parentElement : container;
+    
+    // Look up the DOM tree to find conversation structure indicators
+    while (element && element !== document.body) {
+        // Common Gemini selectors for AI responses
+        // These are based on Gemini's current DOM structure patterns
+        const classList = element.classList ? Array.from(element.classList) : [];
+        const role = element.getAttribute('role');
+        const dataRole = element.getAttribute('data-role');
+        
+        // Check for AI response indicators
+        if (
+            // Gemini uses these patterns for AI responses
+            classList.some(cls => cls.includes('model-response') || 
+                               cls.includes('assistant') || 
+                               cls.includes('response') ||
+                               cls.includes('message-content') ||
+                               cls.includes('model-turn') ||
+                               cls.includes('conversation-turn') ||
+                               cls.includes('response-container')) ||
+            role === 'presentation' ||
+            dataRole === 'assistant' ||
+            dataRole === 'model' ||
+            element.tagName === 'MESSAGE-CONTENT' ||
+            element.tagName === 'MODEL-RESPONSE' ||
+            // Look for specific Gemini response containers
+            element.querySelector('[data-message-author-role="model"]') ||
+            element.closest('[data-message-author-role="model"]') ||
+            element.closest('[role="presentation"]') ||
+            // Check for Gemini-specific response indicators
+            element.closest('.model-response-text') ||
+            element.closest('.response-container') ||
+            element.closest('.conversation-turn[data-role="model"]')
+        ) {
+            console.log('Detected AI response element:', element.tagName, element.className);
+            return true;
+        }
+        
+        // Check for user input indicators (should return false)
+        if (
+            classList.some(cls => cls.includes('user-input') || 
+                               cls.includes('user-message') ||
+                               cls.includes('user-turn') ||
+                               cls.includes('input') ||
+                               cls.includes('prompt') ||
+                               cls.includes('user-query')) ||
+            dataRole === 'user' ||
+            element.closest('[data-message-author-role="user"]') ||
+            element.closest('[contenteditable="true"]') ||
+            element.closest('[role="textbox"]') ||
+            element.closest('.conversation-turn[data-role="user"]') ||
+            element.closest('.user-message') ||
+            element.closest('.user-turn') ||
+            element.tagName === 'TEXTAREA' ||
+            element.tagName === 'INPUT'
+        ) {
+            console.log('Detected user input element, blocking Follow-up button:', element.tagName, element.className);
+            return false;
+        }
+        
+        element = element.parentElement;
+    }
+    
+    // Fallback: Use heuristics to determine if this is likely an AI response
+    const selectionText = selection.toString().trim();
+    const selectionRect = range.getBoundingClientRect();
+    
+    // Check distance from input areas - if too close, likely user input
+    const inputElements = document.querySelectorAll('textarea, input, [contenteditable="true"], [role="textbox"]');
+    
+    for (const input of inputElements) {
+        const inputRect = input.getBoundingClientRect();
+        const distance = Math.sqrt(
+            Math.pow(selectionRect.left - inputRect.left, 2) + 
+            Math.pow(selectionRect.top - inputRect.top, 2)
+        );
+        
+        // If selection is very close to an input, likely user input
+        // Be more lenient with short selections as they might be technical terms
+        const proximityThreshold = selectionText.length <= 10 ? 50 : 100;
+        if (distance < proximityThreshold) {
+            console.log(`Selection too close to input element (${distance.toFixed(0)}px < ${proximityThreshold}px), blocking Follow-up button`);
+            return false;
+        }
+    }
+    
+    // Check if selection contains typical AI response patterns
+    const aiResponsePatterns = [
+        /I'd be happy to help/i,
+        /Here's what/i,
+        /According to/i,
+        /Based on/i,
+        /Let me explain/i,
+        /To answer your question/i,
+        /The answer is/i,
+        /You can/i,
+        /This means/i,
+        /In other words/i,
+        // Short-form patterns that often appear in AI responses
+        /^However/i,
+        /^Additionally/i,
+        /^Furthermore/i,
+        /^Therefore/i,
+        /^Essentially/i,
+        /^Basically/i
+    ];
+    
+    const hasAIPattern = aiResponsePatterns.some(pattern => pattern.test(selectionText));
+    
+    // Check if selection contains typical user input patterns
+    const userInputPatterns = [
+        /^How do I/i,
+        /^What is/i,
+        /^Can you/i,
+        /^Please/i,
+        /^I want/i,
+        /^I need/i,
+        /^Could you/i,
+        /\?$/  // Ends with question mark
+    ];
+    
+    const hasUserPattern = userInputPatterns.some(pattern => pattern.test(selectionText));
+    
+    // For very short selections (single words), be less strict about user patterns
+    // unless they're clearly questions
+    if (hasUserPattern && (selectionText.length > 10 || selectionText.includes('?'))) {
+        console.log('Selection matches user input pattern, blocking Follow-up button');
+        return false;
+    }
+    
+    // For shorter selections, be more permissive if they don't match user patterns
+    // Single words or short phrases can be valuable for follow-ups (e.g., technical terms)
+    const isSubstantial = selectionText.length >= 3;
+    
+    // Special handling for single words that are likely technical terms or concepts
+    const isSingleWord = selectionText.split(/\s+/).length === 1;
+    const looksLikeTechnicalTerm = isSingleWord && (
+        /^[A-Z][a-z]+$/.test(selectionText) ||  // Capitalized word
+        /^[a-z]+[A-Z]/.test(selectionText) ||   // camelCase
+        /^[A-Z_]+$/.test(selectionText) ||      // CONSTANT_CASE
+        /^[a-z-]+$/.test(selectionText) ||      // kebab-case
+        selectionText.length > 6                // Longer single words are often technical
+    );
+    
+    const result = hasAIPattern || (isSubstantial && !hasUserPattern) || looksLikeTechnicalTerm;
+    
+    console.log('Fallback AI response detection:', { 
+        hasAIPattern, 
+        hasUserPattern, 
+        isSubstantial,
+        isSingleWord,
+        looksLikeTechnicalTerm,
+        result,
+        textSample: selectionText.length > 50 ? selectionText.substring(0, 50) + '...' : selectionText
+    });
+    
+    return result;
+}
 
 // Safari compatibility: Use browser API if available, fallback to chrome
 const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
 // Load slash commands from storage
 loadSlashCommands();
+
+// Load wide mode settings
+loadWideModeSettings();
+
+// Listen for messages from popup
+browserAPI.runtime.onMessage.addListener((message) => {
+    if (message.action === 'toggleWideMode') {
+        wideModeEnabled = message.enabled;
+        wideModeWidth = message.width;
+        if (wideModeEnabled) {
+            applyWideMode();
+        } else {
+            removeWideMode();
+        }
+    } else if (message.action === 'updateWidth') {
+        wideModeWidth = message.width;
+        if (wideModeEnabled) {
+            applyWideMode();
+        }
+    }
+});
 
 // Listen for storage changes to update commands in real-time
 browserAPI.storage.onChanged.addListener((changes, namespace) => {
@@ -58,6 +256,10 @@ async function loadSlashCommands() {
         
         console.log('Loaded slash commands:', slashCommands);
     } catch (error) {
+        if (error.message.includes('Extension context invalidated')) {
+            console.log('Extension context invalidated - skipping slash commands load');
+            return;
+        }
         console.error('Error loading slash commands:', error);
     }
 }
@@ -115,15 +317,24 @@ async function saveInputContent() {
     if (!inputField) return;
     const currentUrl = window.location.href;
     const textToSave = inputField.tagName === 'TEXTAREA' || inputField.tagName === 'INPUT' ? inputField.value : inputField.innerText;
-    if (textToSave.trim() === '') {
-        const savedData = await browserAPI.storage.local.get(AUTOSAVE_STORAGE_KEY);
-        if (savedData[AUTOSAVE_STORAGE_KEY] && savedData[AUTOSAVE_STORAGE_KEY].url === currentUrl) {
-            await browserAPI.storage.local.remove(AUTOSAVE_STORAGE_KEY);
+    
+    try {
+        if (textToSave.trim() === '') {
+            const savedData = await browserAPI.storage.local.get(AUTOSAVE_STORAGE_KEY);
+            if (savedData[AUTOSAVE_STORAGE_KEY] && savedData[AUTOSAVE_STORAGE_KEY].url === currentUrl) {
+                await browserAPI.storage.local.remove(AUTOSAVE_STORAGE_KEY);
+            }
+            return;
         }
-        return;
+        const dataToStore = { url: currentUrl, text: textToSave, timestamp: Date.now() };
+        await browserAPI.storage.local.set({ [AUTOSAVE_STORAGE_KEY]: dataToStore });
+    } catch (error) {
+        if (error.message.includes('Extension context invalidated')) {
+            console.log('Extension context invalidated - skipping autosave');
+            return;
+        }
+        console.error('Error saving input content:', error);
     }
-    const dataToStore = { url: currentUrl, text: textToSave, timestamp: Date.now() };
-    await browserAPI.storage.local.set({ [AUTOSAVE_STORAGE_KEY]: dataToStore });
 }
 
 function handleAutosaveInput() {
@@ -135,17 +346,26 @@ async function restoreInputContent(inputField) {
     if (!inputField) return;
     const currentUrl = window.location.href;
     if (lastRestoredUrl === currentUrl) return;
-    const result = await browserAPI.storage.local.get(AUTOSAVE_STORAGE_KEY);
-    const savedData = result[AUTOSAVE_STORAGE_KEY];
-    if (savedData && savedData.url === currentUrl && savedData.text) {
-        if (inputField.tagName === 'TEXTAREA' || inputField.tagName === 'INPUT') {
-            inputField.value = savedData.text;
-        } else {
-            inputField.innerText = savedData.text;
+    
+    try {
+        const result = await browserAPI.storage.local.get(AUTOSAVE_STORAGE_KEY);
+        const savedData = result[AUTOSAVE_STORAGE_KEY];
+        if (savedData && savedData.url === currentUrl && savedData.text) {
+            if (inputField.tagName === 'TEXTAREA' || inputField.tagName === 'INPUT') {
+                inputField.value = savedData.text;
+            } else {
+                inputField.innerText = savedData.text;
+            }
+            inputField.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+            inputField.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+            lastRestoredUrl = currentUrl;
         }
-        inputField.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-        inputField.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-        lastRestoredUrl = currentUrl;
+    } catch (error) {
+        if (error.message.includes('Extension context invalidated')) {
+            console.log('Extension context invalidated - skipping autosave restore');
+            return;
+        }
+        console.error('Error restoring input content:', error);
     }
 }
 
@@ -213,99 +433,310 @@ function handleMouseDown(event) {
         return;
     }
     
-    // If there's a follow-up button and we're clicking elsewhere, remove it
-    // This handles the case where user clicks to position cursor elsewhere
+    // If there's a follow-up button and we're clicking elsewhere, only remove it
+    // if we're not just adjusting text selection or clicking nearby
     if (followUpButton) {
-        removeFollowUpButton();
+        // Don't remove button immediately - let the selection change handler decide
+        // This prevents button removal during text selection adjustments
+        const buttonRect = followUpButton.getBoundingClientRect();
+        const clickX = event.clientX;
+        const clickY = event.clientY;
+        
+        // If clicking far from the button (more than 100px away), remove it
+        const distance = Math.sqrt(
+            Math.pow(clickX - (buttonRect.left + buttonRect.width / 2), 2) +
+            Math.pow(clickY - (buttonRect.top + buttonRect.height / 2), 2)
+        );
+        
+        if (distance > 100) {
+            // Clear stability timeout and remove button
+            if (buttonStabilityTimeout) {
+                clearTimeout(buttonStabilityTimeout);
+                buttonStabilityTimeout = null;
+            }
+            removeFollowUpButton();
+            lastSelectedText = '';
+        }
     }
 }
 
 function handleSelectionChange() {
-    // This fires whenever the selection changes, including when it's cleared
-    const selectedText = window.getSelection().toString().trim();
+    // Clear any existing stability timeout
+    if (buttonStabilityTimeout) {
+        clearTimeout(buttonStabilityTimeout);
+        buttonStabilityTimeout = null;
+    }
     
-    // If no text is selected and we have a button, remove it
-    if (!selectedText && followUpButton) {
-        removeFollowUpButton();
+    const selection = window.getSelection();
+    const selectedText = selection.toString().trim();
+    
+    // If we have a meaningful selection from AI response, update lastSelectedText and keep button
+    if (selectedText && selectedText.length >= 3 && isSelectionFromAIResponse(selection)) {
+        // Check if selection has been extended significantly
+        const selectionExtended = Math.abs(selectedText.length - lastSelectedText.length) > 5;
+        lastSelectedText = selectedText;
+        
+        // If we have a button, update its position smoothly
+        if (followUpButton && followUpButton.classList.contains('show')) {
+            updateButtonPosition();
+            
+            // Provide subtle visual feedback when selection is extended
+            if (selectionExtended) {
+                console.log('Selection extended, button will use current selection on click');
+                // Brief highlight to indicate the button is aware of the extended selection
+                followUpButton.style.boxShadow = 'light-dark(0 2px 8px rgba(26, 115, 232, 0.4), 0 2px 8px rgba(138, 180, 248, 0.4))';
+                setTimeout(() => {
+                    if (followUpButton) {
+                        followUpButton.style.boxShadow = '';
+                    }
+                }, 200);
+            }
+        }
         return;
     }
     
-    // If we have selected text and a button exists, update the button position
-    if (selectedText && followUpButton) {
-        const selection = window.getSelection();
-        if (selection.rangeCount > 0) {
-            const range = selection.getRangeAt(0);
-            const rect = range.getBoundingClientRect();
+    // If no meaningful selection but we recently had one, don't remove button immediately
+    // This prevents the button from disappearing during selection adjustments
+    if (!selectedText && followUpButton && lastSelectedText && !isHoveringButton) {
+        // Give the user 5 seconds to click the button before removing it
+        buttonStabilityTimeout = setTimeout(() => {
+            if (followUpButton && !window.getSelection().toString().trim() && !isHoveringButton) {
+                console.log('Removing follow-up button after stability timeout');
+                removeFollowUpButton();
+                lastSelectedText = '';
+            }
+        }, 5000); // Increased to 5 seconds
+    }
+}
+
+function updateButtonPosition() {
+    if (!followUpButton || !followUpButton.classList.contains('show')) return;
+    
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        
+        // Only update position if selection is visible
+        if (rect.width > 0 && rect.height > 0) {
+            // Calculate new position
+            const buttonTop = window.scrollY + rect.top - 44;
+            const buttonLeft = window.scrollX + rect.left;
             
-            // Update button position
-            followUpButton.style.left = `${window.scrollX + rect.left}px`;
-            followUpButton.style.top = `${window.scrollY + rect.top - 36}px`;
+            // Ensure button doesn't go off screen
+            const viewportWidth = window.innerWidth;
+            const buttonWidth = 120;
+            const finalLeft = Math.min(buttonLeft, viewportWidth - buttonWidth - 16);
+            
+            // Only update position if it's significantly different to prevent jitter
+            const currentLeft = parseInt(followUpButton.style.left) || 0;
+            const currentTop = parseInt(followUpButton.style.top) || 0;
+            const newLeft = Math.max(8, finalLeft);
+            const newTop = Math.max(8, buttonTop);
+            
+            if (Math.abs(currentLeft - newLeft) > 10 || Math.abs(currentTop - newTop) > 10) {
+                // Smooth position update with dedicated position transition
+                followUpButton.style.transition = 'left 0.2s cubic-bezier(0.4, 0.0, 0.2, 1), top 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)';
+                followUpButton.style.left = `${newLeft}px`;
+                followUpButton.style.top = `${newTop}px`;
+            }
         }
     }
 }
 
 function handleTextSelection(event) {
-    const selectedText = window.getSelection().toString().trim();
-
-    // If clicking on the follow-up button, don't interfere
-    if (followUpButton && followUpButton.contains(event.target)) {
-        return;
+    // Clear any existing timeout
+    if (selectionTimeout) {
+        clearTimeout(selectionTimeout);
     }
+    
+    // Debounce selection handling for better performance
+    selectionTimeout = setTimeout(() => {
+        const selectedText = window.getSelection().toString().trim();
 
-    // Remove existing button first
-    if (followUpButton) {
-        removeFollowUpButton();
-    }
-
-    // Create new button if we have selected text
-    if (selectedText) {
-        const selection = window.getSelection();
-        if (selection.rangeCount > 0) {
-            const range = selection.getRangeAt(0);
-            const rect = range.getBoundingClientRect();
-            createFollowUpButton(selectedText, rect.left, rect.top);
+        // If clicking on the follow-up button, don't interfere
+        if (followUpButton && followUpButton.contains(event.target)) {
+            return;
         }
-    }
+
+        // If we have meaningful selected text FROM AI RESPONSE, create or keep the button
+        if (selectedText && selectedText.length >= 3) {
+            const selection = window.getSelection();
+            
+            // Only proceed if selection is from AI response
+            if (!isSelectionFromAIResponse(selection)) {
+                console.log('Selection is from user input, not showing Follow-up button');
+                return;
+            }
+            
+            // If button already exists and text hasn't changed significantly, just update position
+            // But allow for larger changes in case of drag-extended selections
+            if (followUpButton && Math.abs(selectedText.length - lastSelectedText.length) < 20) {
+                lastSelectedText = selectedText;
+                updateButtonPosition();
+                
+                // Log selection changes for debugging drag extensions
+                if (selectedText !== lastSelectedText) {
+                    console.log('Selection updated:', { 
+                        from: lastSelectedText.substring(0, 30) + '...', 
+                        to: selectedText.substring(0, 30) + '...',
+                        lengthChange: selectedText.length - lastSelectedText.length
+                    });
+                }
+                return;
+            }
+            
+            // Remove existing button and create new one
+            if (followUpButton) {
+                // Clear any stability timeout since we're creating a new button
+                if (buttonStabilityTimeout) {
+                    clearTimeout(buttonStabilityTimeout);
+                    buttonStabilityTimeout = null;
+                }
+                removeFollowUpButton();
+            }
+
+            if (selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                const rect = range.getBoundingClientRect();
+                
+                // Only show button if selection is visible on screen
+                if (rect.width > 0 && rect.height > 0) {
+                    lastSelectedText = selectedText;
+                    console.log('Creating Follow-up button for AI response selection:', selectedText.substring(0, 50) + '...');
+                    createFollowUpButton(selectedText);
+                }
+            }
+        }
+        // If no meaningful selection, let handleSelectionChange deal with button removal
+    }, 150); // Increased debounce to 150ms for better stability
 }
 
-function createFollowUpButton(text, x, y) {
+function createFollowUpButton(text) {
     followUpButton = document.createElement('button');
     followUpButton.id = 'followUpButton';
-    followUpButton.textContent = 'Follow-up';
-    // Position the button above the first line of the selected text
+    followUpButton.innerHTML = 'Follow-up';
+    
+    // Store original text for debugging and fallback
+    followUpButton.dataset.originalText = text;
+    
+    // Position the button above the selection with native spacing
     const selection = window.getSelection();
     if (selection.rangeCount > 0) {
         const range = selection.getRangeAt(0);
         const rect = range.getBoundingClientRect();
-        // Place the button above the selection, horizontally aligned to the left of the selection
+        
+        // Calculate optimal position
+        const buttonTop = window.scrollY + rect.top - 44; // 44px above for better spacing
+        const buttonLeft = window.scrollX + rect.left;
+        
+        // Ensure button doesn't go off screen
+        const viewportWidth = window.innerWidth;
+        const buttonWidth = 120; // Approximate button width
+        const finalLeft = Math.min(buttonLeft, viewportWidth - buttonWidth - 16);
+        
         followUpButton.style.position = 'absolute';
-        followUpButton.style.left = `${window.scrollX + rect.left}px`;
-        followUpButton.style.top = `${window.scrollY + rect.top - 36}px`;
-        followUpButton.style.zIndex = '9999';
-        followUpButton.style.padding = '8px 16px';
-        followUpButton.style.borderRadius = '6px';
-        followUpButton.style.background = '#2d3748';
-        followUpButton.style.color = '#fff';
-        followUpButton.style.fontWeight = 'bold';
-        followUpButton.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)';
-        followUpButton.style.border = 'none';
-        followUpButton.style.cursor = 'pointer';
+        followUpButton.style.left = `${Math.max(8, finalLeft)}px`;
+        followUpButton.style.top = `${Math.max(8, buttonTop)}px`;
     }
 
-    followUpButton.onclick = function() {
-        console.log("Follow-up button clicked with text:", text);
-        insertTextIntoInputBox(text);
-        removeFollowUpButton();
+    // Add hover event listeners to track hover state
+    followUpButton.addEventListener('mouseenter', () => {
+        isHoveringButton = true;
+        // Cancel any pending removal when hovering
+        if (buttonStabilityTimeout) {
+            clearTimeout(buttonStabilityTimeout);
+            buttonStabilityTimeout = null;
+        }
+    });
+    
+    followUpButton.addEventListener('mouseleave', () => {
+        isHoveringButton = false;
+    });
+    
+    followUpButton.onclick = function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        // Get the current selection at click time, not creation time
+        // This handles cases where user extends selection after button appears
+        const currentSelection = window.getSelection();
+        const currentText = currentSelection.toString().trim();
+        
+        // Use current selection if it exists and is from AI response, otherwise fall back to original
+        let textToUse = text;
+        const originalText = followUpButton.dataset.originalText;
+        
+        if (currentText && currentText.length >= 3 && isSelectionFromAIResponse(currentSelection)) {
+            textToUse = currentText;
+            console.log("Using current selection:", {
+                original: originalText?.substring(0, 30) + '...',
+                current: textToUse.substring(0, 30) + '...',
+                lengthChange: textToUse.length - (originalText?.length || 0)
+            });
+        } else if (currentText && currentText !== originalText) {
+            console.log("Current selection rejected (not from AI response):", {
+                current: currentText.substring(0, 30) + '...',
+                usingOriginal: textToUse.substring(0, 30) + '...'
+            });
+        } else {
+            console.log("Using original selection:", textToUse.substring(0, 30) + '...');
+        }
+        
+        console.log("Follow-up button final text:", textToUse);
+        
+        // Add click feedback
+        followUpButton.style.transform = 'translateY(0) scale(0.95)';
+        
+        setTimeout(() => {
+            insertTextIntoInputBox(textToUse);
+            removeFollowUpButton();
+        }, 100);
     };
 
     document.body.appendChild(followUpButton);
+    
+    // Force a reflow to ensure initial hidden state is applied
+    followUpButton.offsetHeight;
+    
+    // Trigger show animation on next frame to prevent flash
+    requestAnimationFrame(() => {
+        if (followUpButton) {
+            followUpButton.classList.add('show');
+        }
+    });
 }
 
 function removeFollowUpButton() {
     if (followUpButton) {
-        followUpButton.remove();
-        followUpButton = null;
+        // Clear any stability timeout
+        if (buttonStabilityTimeout) {
+            clearTimeout(buttonStabilityTimeout);
+            buttonStabilityTimeout = null;
+        }
+        
+        // Disable pointer events immediately to prevent interaction during hide
+        followUpButton.style.pointerEvents = 'none';
+        
+        // Remove show class to trigger hide animation
+        followUpButton.classList.remove('show');
+        
+        // Apply explicit hide styles to ensure smooth transition
+        followUpButton.style.transition = 'all 0.15s cubic-bezier(0.4, 0.0, 0.2, 1)';
+        followUpButton.style.opacity = '0';
+        followUpButton.style.transform = 'translateY(8px) scale(0.9)';
+        
+        setTimeout(() => {
+            if (followUpButton) {
+                followUpButton.remove();
+                followUpButton = null;
+            }
+        }, 150);
     }
+    
+    // Reset state
+    lastSelectedText = '';
+    isHoveringButton = false;
 }
 
 function insertTextIntoInputBox(text) {
@@ -499,6 +930,7 @@ function handleKeyDown(event) {
                 event.stopPropagation();
                 selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
                 updateSelection(items, selectedIndex);
+                scrollIntoViewIfNeeded(items[selectedIndex]);
                 break;
                 
             case 'ArrowUp':
@@ -506,6 +938,7 @@ function handleKeyDown(event) {
                 event.stopPropagation();
                 selectedIndex = Math.max(selectedIndex - 1, 0);
                 updateSelection(items, selectedIndex);
+                scrollIntoViewIfNeeded(items[selectedIndex]);
                 break;
                 
             case 'Enter':
@@ -662,12 +1095,20 @@ function showCommandAutocomplete(inputElement, partial, slashIndex) {
     // Position the dropdown
     positionAutocomplete(inputElement);
     
-    // Populate with matching commands
-    commandAutocomplete.innerHTML = matchingCommands.map((cmd, index) => `
-        <div class="autocomplete-item ${index === 0 ? 'selected' : ''}" data-command="${cmd}">
-            <div class="command-name">/${cmd}</div>
-        </div>
-    `).join('');
+    // Populate with matching commands with enhanced UI
+    commandAutocomplete.innerHTML = matchingCommands.map((cmd, index) => {
+        const commandPrompt = slashCommands[cmd] || '';
+        const previewText = commandPrompt.replace('{text}', '[selected text]').substring(0, 60) + (commandPrompt.length > 60 ? '...' : '');
+        return `
+            <div class="autocomplete-item ${index === 0 ? 'selected' : ''}" data-command="${cmd}">
+                <div class="command-name">
+                    <span class="slash-indicator">/</span>${cmd}
+                </div>
+                <div class="command-preview">${previewText}</div>
+                <div class="keyboard-hint">↵</div>
+            </div>
+        `;
+    }).join('');
     
     // Add click handlers with proper event handling
     commandAutocomplete.querySelectorAll('.autocomplete-item').forEach(item => {
@@ -685,7 +1126,17 @@ function showCommandAutocomplete(inputElement, partial, slashIndex) {
         }, { capture: true });
     });
     
+    // Show with smooth animation
     commandAutocomplete.style.display = 'block';
+    // Force a reflow to ensure the display change is applied
+    commandAutocomplete.offsetHeight;
+    // Trigger the animation
+    setTimeout(() => {
+        if (commandAutocomplete) {
+            commandAutocomplete.style.opacity = '1';
+            commandAutocomplete.style.transform = 'translateY(0) scale(1)';
+        }
+    }, 0);
     
     // Re-position after content is populated (for accurate height calculation)
     setTimeout(() => positionAutocomplete(inputElement), 0);
@@ -700,25 +1151,24 @@ function createAutocompleteDropdown() {
 
 function positionAutocomplete(inputElement) {
     const style = commandAutocomplete.style;
-    const dropdownHeight = commandAutocomplete.offsetHeight || 160; // fallback height
+    const dropdownHeight = commandAutocomplete.offsetHeight || 280; // fallback height matches max-height
     
     // Get cursor position for precise positioning
     const cursorPos = getCursorPosition(inputElement);
     const caretCoords = getCaretCoordinates(inputElement, cursorPos);
     
     if (caretCoords) {
-        // Position dropdown so its bottom aligns with the top of cursor line (your approach!)
-        const targetTop = caretCoords.top - dropdownHeight - 2; // small gap
+        // Position dropdown above the cursor line with proper spacing (native feel)
+        const targetTop = caretCoords.top - dropdownHeight - 8; // 8px gap for better visual spacing
         
         style.left = `${caretCoords.left}px`;
         style.top = `${targetTop}px`;
         
         // Handle viewport boundaries
-        const viewportHeight = window.innerHeight;
         const viewportWidth = window.innerWidth;
         
         // If dropdown goes above viewport, position below cursor line instead
-        if (targetTop < window.scrollY + 10) {
+        if (targetTop < window.scrollY + 20) {
             style.top = `${caretCoords.bottom + 2}px`;
         }
         
@@ -924,10 +1374,228 @@ function setCursorPosition(element, position) {
 function hideCommandAutocomplete() {
     if (commandAutocomplete) {
         console.log('Hiding command autocomplete dropdown');
-        commandAutocomplete.style.display = 'none';
-        commandAutocomplete.innerHTML = ''; // Clear content to avoid stale state
+        // Smooth hide animation
+        commandAutocomplete.style.opacity = '0';
+        commandAutocomplete.style.transform = 'translateY(8px) scale(0.95)';
+        setTimeout(() => {
+            if (commandAutocomplete) {
+                commandAutocomplete.style.display = 'none';
+                commandAutocomplete.innerHTML = ''; // Clear content to avoid stale state
+            }
+        }, 150);
     }
 }
+
+function scrollIntoViewIfNeeded(element) {
+    if (!element || !commandAutocomplete) return;
+    
+    const container = commandAutocomplete;
+    const containerRect = container.getBoundingClientRect();
+    const elementRect = element.getBoundingClientRect();
+    
+    if (elementRect.top < containerRect.top) {
+        // Element is above visible area
+        element.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    } else if (elementRect.bottom > containerRect.bottom) {
+        // Element is below visible area
+        element.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+}
+
+// Wide Mode Functionality
+async function loadWideModeSettings() {
+    try {
+        const result = await browserAPI.storage.sync.get(['wideModeEnabled', 'wideModeWidth']);
+        wideModeEnabled = result.wideModeEnabled || false;
+        wideModeWidth = result.wideModeWidth || 1200;
+        
+        if (wideModeEnabled) {
+            // Apply wide mode on page load if enabled
+            applyWideMode();
+        }
+    } catch (error) {
+        if (error.message.includes('Extension context invalidated')) {
+            console.log('Extension context invalidated - skipping wide mode settings load');
+            return;
+        }
+        console.error('Error loading wide mode settings:', error);
+    }
+}
+
+function applyWideMode() {
+    if (wideModeApplied) {
+        // Update existing wide mode
+        updateWideMode();
+        return;
+    }
+    
+    console.log('Applying wide mode with width:', wideModeWidth);
+    
+    // Create style element for wide mode if it doesn't exist
+    let wideStyleElement = document.getElementById('gemini-enhancer-wide-mode');
+    if (!wideStyleElement) {
+        wideStyleElement = document.createElement('style');
+        wideStyleElement.id = 'gemini-enhancer-wide-mode';
+        document.head.appendChild(wideStyleElement);
+    }
+    
+    // CSS rules to widen only the conversation area, don't touch sidebar at all
+    wideStyleElement.textContent = `
+        /* Only target content containers - leave sidebar completely untouched */
+        
+        /* Override common width constraints in conversation messages */
+        [data-testid="conversation-turn"],
+        [data-testid*="turn-content"],
+        .model-response-text,
+        .user-input-text {
+            max-width: ${wideModeWidth}px !important;
+        }
+        
+        /* Widen the input area */
+        rich-textarea,
+        [contenteditable="true"][role="textbox"] {
+            max-width: ${wideModeWidth}px !important;
+        }
+        
+        /* Target input containers */
+        rich-textarea > div,
+        [role="textbox"] > div,
+        [data-testid*="input"] {
+            max-width: ${wideModeWidth}px !important;
+        }
+        
+        /* Override inline styles with common hardcoded widths */
+        [style*="max-width: 768px"],
+        [style*="max-width: 720px"],
+        [style*="max-width: 800px"],
+        [style*="max-width: 900px"] {
+            max-width: ${wideModeWidth}px !important;
+        }
+        
+        /* Target any message content containers */
+        [data-testid*="message"],
+        [data-testid*="response"],
+        .conversation-container {
+            max-width: ${wideModeWidth}px !important;
+        }
+        
+        /* Ensure body can accommodate wider content */
+        body {
+            overflow-x: auto !important;
+        }
+    `;
+    
+    // Also directly modify elements that might be constraining width
+    setTimeout(() => {
+        applyWideModeToElements();
+    }, 100);
+    
+    // Start interval to continuously apply wide mode as content loads
+    if (wideModeInterval) {
+        clearInterval(wideModeInterval);
+    }
+    wideModeInterval = setInterval(() => {
+        if (wideModeEnabled) {
+            applyWideModeToElements();
+        }
+    }, 2000); // Check every 2 seconds
+    
+    wideModeApplied = true;
+    console.log('Wide mode applied successfully');
+}
+
+function applyWideModeToElements() {
+    // Only target content elements that need widening, avoid layout containers
+    const contentSelectors = [
+        '[data-testid="conversation-turn"]',
+        '[data-testid*="turn-content"]',
+        'rich-textarea',
+        '[contenteditable="true"][role="textbox"]',
+        '.model-response-text',
+        '.user-input-text'
+    ];
+    
+    contentSelectors.forEach(selector => {
+        const elements = document.querySelectorAll(selector);
+        elements.forEach(element => {
+            const computedStyle = window.getComputedStyle(element);
+            const currentMaxWidth = computedStyle.maxWidth;
+            
+            // Only modify if element has a restrictive max-width that's smaller than our target
+            if (currentMaxWidth && currentMaxWidth !== 'none' && parseInt(currentMaxWidth) < wideModeWidth) {
+                element.style.maxWidth = `${wideModeWidth}px`;
+                console.log(`Wide mode: Updated ${selector} from ${currentMaxWidth} to ${wideModeWidth}px`);
+            }
+        });
+    });
+    
+    // Look for conversation-related divs with inline width constraints
+    const constrainedDivs = document.querySelectorAll('[data-testid*="conversation"] div[style*="max-width"], [data-testid*="turn"] div[style*="max-width"]');
+    constrainedDivs.forEach(div => {
+        const style = div.getAttribute('style');
+        if (style && (style.includes('768px') || style.includes('720px') || style.includes('800px') || style.includes('900px'))) {
+            div.style.maxWidth = `${wideModeWidth}px`;
+            console.log('Wide mode: Updated conversation div with inline style');
+        }
+    });
+}
+
+function updateWideMode() {
+    const wideStyleElement = document.getElementById('gemini-enhancer-wide-mode');
+    if (wideStyleElement && wideModeApplied) {
+        // Reapply the styles with new width
+        wideModeApplied = false; // Reset to force reapplication
+        applyWideMode();
+        console.log('Wide mode updated to width:', wideModeWidth);
+    }
+}
+
+function removeWideMode() {
+    console.log('Removing wide mode');
+    const wideStyleElement = document.getElementById('gemini-enhancer-wide-mode');
+    if (wideStyleElement) {
+        wideStyleElement.remove();
+    }
+    
+    // Clear the monitoring interval
+    if (wideModeInterval) {
+        clearInterval(wideModeInterval);
+        wideModeInterval = null;
+    }
+    
+    wideModeApplied = false;
+    console.log('Wide mode removed successfully');
+}
+
+// Apply wide mode on page navigation changes
+const originalPushState = history.pushState;
+const originalReplaceState = history.replaceState;
+
+history.pushState = function() {
+    originalPushState.apply(history, arguments);
+    setTimeout(() => {
+        if (wideModeEnabled) {
+            applyWideMode();
+        }
+    }, 500);
+};
+
+history.replaceState = function() {
+    originalReplaceState.apply(history, arguments);
+    setTimeout(() => {
+        if (wideModeEnabled) {
+            applyWideMode();
+        }
+    }, 500);
+};
+
+window.addEventListener('popstate', () => {
+    setTimeout(() => {
+        if (wideModeEnabled) {
+            applyWideMode();
+        }
+    }, 500);
+});
 
 
 

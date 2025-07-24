@@ -5,7 +5,8 @@
   "description": "Ask follow-up questions to Gemini with custom slash commands. Now also autosaves your input on gemini.google.com!",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "tabs"
   ],
   "host_permissions": [
     "*://gemini.google.com/*"
