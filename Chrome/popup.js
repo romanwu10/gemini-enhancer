@@ -9,15 +9,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     const triggerInput = document.getElementById('commandTrigger');
     const promptInput = document.getElementById('commandPrompt');
     
-    // Wide mode elements
-    const wideModeToggle = document.getElementById('wideModeToggle');
-    const wideModeOptions = document.getElementById('wideModeOptions');
-    const widthSlider = document.getElementById('widthSlider');
-    const widthValue = document.getElementById('widthValue');
     
-    // Load and display existing commands and settings
+    // Load and display existing commands
     await loadCommands();
-    await loadWideMode();
     
     // Add new command
     addCommandBtn.addEventListener('click', addCommand);
@@ -31,10 +25,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (e.key === 'Enter' && e.ctrlKey) addCommand();
     });
     
-    // Wide mode event listeners
-    wideModeToggle.addEventListener('change', toggleWideMode);
-    widthSlider.addEventListener('input', updateWidth);
-    widthSlider.addEventListener('change', saveWidth);
     
     async function loadCommands() {
         try {
@@ -192,76 +182,4 @@ document.addEventListener('DOMContentLoaded', async function() {
         }, 2500);
     }
     
-    // Wide Mode Functions
-    async function loadWideMode() {
-        try {
-            const result = await browserAPI.storage.sync.get(['wideModeEnabled', 'wideModeWidth']);
-            const enabled = result.wideModeEnabled || false;
-            const width = result.wideModeWidth || 1200;
-            
-            wideModeToggle.checked = enabled;
-            widthSlider.value = width;
-            widthValue.textContent = width;
-            
-            // Show/hide width options based on toggle state
-            wideModeOptions.style.display = enabled ? 'block' : 'none';
-            
-        } catch (error) {
-            console.error('Error loading wide mode settings:', error);
-        }
-    }
-    
-    async function toggleWideMode() {
-        const enabled = wideModeToggle.checked;
-        
-        try {
-            await browserAPI.storage.sync.set({ wideModeEnabled: enabled });
-            
-            // Show/hide width options
-            wideModeOptions.style.display = enabled ? 'block' : 'none';
-            
-            // Send message to content script
-            const tabs = await browserAPI.tabs.query({ active: true, currentWindow: true });
-            if (tabs[0] && tabs[0].url && tabs[0].url.includes('gemini.google.com')) {
-                browserAPI.tabs.sendMessage(tabs[0].id, {
-                    action: 'toggleWideMode',
-                    enabled: enabled,
-                    width: parseInt(widthSlider.value)
-                });
-            }
-            
-            showNotification(enabled ? 'Wide mode enabled' : 'Wide mode disabled', 'success');
-            
-        } catch (error) {
-            console.error('Error toggling wide mode:', error);
-            showNotification('Error updating wide mode', 'error');
-        }
-    }
-    
-    function updateWidth() {
-        const width = widthSlider.value;
-        widthValue.textContent = width;
-    }
-    
-    async function saveWidth() {
-        const width = parseInt(widthSlider.value);
-        
-        try {
-            await browserAPI.storage.sync.set({ wideModeWidth: width });
-            
-            // Send updated width to content script if wide mode is enabled
-            if (wideModeToggle.checked) {
-                const tabs = await browserAPI.tabs.query({ active: true, currentWindow: true });
-                if (tabs[0] && tabs[0].url && tabs[0].url.includes('gemini.google.com')) {
-                    browserAPI.tabs.sendMessage(tabs[0].id, {
-                        action: 'updateWidth',
-                        width: width
-                    });
-                }
-            }
-            
-        } catch (error) {
-            console.error('Error saving width:', error);
-        }
-    }
 });

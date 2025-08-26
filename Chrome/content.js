@@ -12,10 +12,7 @@ let selectionTimeout = null;
 let lastSelectedText = '';
 let buttonStabilityTimeout = null;
 let isHoveringButton = false;
-let wideModeEnabled = false;
-let wideModeWidth = 1200;
-let wideModeApplied = false;
-let wideModeInterval = null;
+// Wide mode variables removed
 
 // Centralized State Management System
 class EnhancerState {
@@ -38,14 +35,7 @@ class EnhancerState {
                 isActive: false
             },
             
-            // Wide mode state
-            wideMode: {
-                enabled: false,
-                width: 1200,
-                applied: false,
-                interval: null,
-                styleElement: null
-            },
+            // Wide mode state removed
             
             // Auto-save state
             autoSave: {
@@ -138,7 +128,7 @@ class EventCoordinator {
         this.featurePriority = {
             'follow-up': 3,
             'slash-commands': 2,
-            'wide-mode': 1,
+            // Wide mode priority removed
             'auto-save': 1
         };
     }
@@ -390,25 +380,12 @@ function isSelectionFromAIResponse(selection) {
 // Load slash commands from storage
 loadSlashCommands();
 
-// Load wide mode settings
-loadWideModeSettings();
+// Wide mode loading removed
 
 // Listen for messages from popup
 browserAPI.runtime.onMessage.addListener((message) => {
-    if (message.action === 'toggleWideMode') {
-        wideModeEnabled = message.enabled;
-        wideModeWidth = message.width;
-        if (wideModeEnabled) {
-            applyWideMode();
-        } else {
-            removeWideMode();
-        }
-    } else if (message.action === 'updateWidth') {
-        wideModeWidth = message.width;
-        if (wideModeEnabled) {
-            applyWideMode();
-        }
-    }
+    // Wide mode message handlers removed
+    console.log('Message received:', message);
 });
 
 // Listen for storage changes to update commands in real-time
@@ -666,8 +643,8 @@ function onUrlChange() {
 }
 
 function startUrlPolling() {
-    // Clear existing interval
-    const currentInterval = enhancerState.get('wideMode.interval');
+    // Clear existing interval - reuse the removed wide mode interval variable for cleanup
+    const currentInterval = enhancerState.get('observers.urlPolling');
     if (currentInterval) {
         clearInterval(currentInterval);
     }
@@ -1740,22 +1717,22 @@ function positionAutocomplete(inputElement) {
         }
         
         // Ensure dropdown doesn't go off right edge
-        const dropdownWidth = 150; // Fixed width - 40% of original 280px
+        const dropdownWidth = 600; // Wider dropdown for better content display
         if (caretCoords.left + dropdownWidth > viewportWidth) {
             style.left = `${viewportWidth - dropdownWidth - 10}px`;
         }
         
         style.width = `${dropdownWidth}px`;
-        style.minWidth = '150px';
-        style.maxWidth = '150px';
+        style.minWidth = '560px';
+        style.maxWidth = '640px';
     } else {
         // Fallback to old method if caret coordinates unavailable
         const rect = inputElement.getBoundingClientRect();
         style.left = `${window.scrollX + rect.left}px`;
         style.top = `${window.scrollY + rect.top - dropdownHeight - 8}px`;
-        style.width = '150px';
-        style.minWidth = '150px';
-        style.maxWidth = '240px';
+        style.width = '600px';
+        style.minWidth = '560px';
+        style.maxWidth = '640px';
         
         if (rect.top - dropdownHeight < 0) {
             style.top = `${window.scrollY + rect.bottom + 8}px`;
@@ -1972,201 +1949,3 @@ function scrollIntoViewIfNeeded(element) {
         element.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
 }
-
-// Wide Mode Functionality
-async function loadWideModeSettings() {
-    try {
-        const result = await browserAPI.storage.sync.get(['wideModeEnabled', 'wideModeWidth']);
-        wideModeEnabled = result.wideModeEnabled || false;
-        wideModeWidth = result.wideModeWidth || 1200;
-        
-        if (wideModeEnabled) {
-            // Apply wide mode on page load if enabled
-            applyWideMode();
-        }
-    } catch (error) {
-        if (error.message.includes('Extension context invalidated')) {
-            console.log('Extension context invalidated - skipping wide mode settings load');
-            return;
-        }
-        console.error('Error loading wide mode settings:', error);
-    }
-}
-
-function applyWideMode() {
-    if (wideModeApplied) {
-        // Update existing wide mode
-        updateWideMode();
-        return;
-    }
-    
-    console.log('Applying wide mode with width:', wideModeWidth);
-    
-    // Create style element for wide mode if it doesn't exist
-    let wideStyleElement = document.getElementById('gemini-enhancer-wide-mode');
-    if (!wideStyleElement) {
-        wideStyleElement = document.createElement('style');
-        wideStyleElement.id = 'gemini-enhancer-wide-mode';
-        document.head.appendChild(wideStyleElement);
-    }
-    
-    // CSS rules to widen only the conversation area, don't touch sidebar at all
-    wideStyleElement.textContent = `
-        /* Only target content containers - leave sidebar completely untouched */
-        
-        /* Override common width constraints in conversation messages */
-        [data-testid="conversation-turn"],
-        [data-testid*="turn-content"],
-        .model-response-text,
-        .user-input-text {
-            max-width: ${wideModeWidth}px !important;
-        }
-        
-        /* Widen the input area */
-        rich-textarea,
-        [contenteditable="true"][role="textbox"] {
-            max-width: ${wideModeWidth}px !important;
-        }
-        
-        /* Target input containers */
-        rich-textarea > div,
-        [role="textbox"] > div,
-        [data-testid*="input"] {
-            max-width: ${wideModeWidth}px !important;
-        }
-        
-        /* Override inline styles with common hardcoded widths */
-        [style*="max-width: 768px"],
-        [style*="max-width: 720px"],
-        [style*="max-width: 800px"],
-        [style*="max-width: 900px"] {
-            max-width: ${wideModeWidth}px !important;
-        }
-        
-        /* Target any message content containers */
-        [data-testid*="message"],
-        [data-testid*="response"],
-        .conversation-container {
-            max-width: ${wideModeWidth}px !important;
-        }
-        
-        /* Ensure body can accommodate wider content */
-        body {
-            overflow-x: auto !important;
-        }
-    `;
-    
-    // Also directly modify elements that might be constraining width
-    setTimeout(() => {
-        applyWideModeToElements();
-    }, 100);
-    
-    // Start interval to continuously apply wide mode as content loads
-    if (wideModeInterval) {
-        clearInterval(wideModeInterval);
-    }
-    wideModeInterval = setInterval(() => {
-        if (wideModeEnabled) {
-            applyWideModeToElements();
-        }
-    }, 2000); // Check every 2 seconds
-    
-    wideModeApplied = true;
-    console.log('Wide mode applied successfully');
-}
-
-function applyWideModeToElements() {
-    // Only target content elements that need widening, avoid layout containers
-    const contentSelectors = [
-        '[data-testid="conversation-turn"]',
-        '[data-testid*="turn-content"]',
-        'rich-textarea',
-        '[contenteditable="true"][role="textbox"]',
-        '.model-response-text',
-        '.user-input-text'
-    ];
-    
-    contentSelectors.forEach(selector => {
-        const elements = document.querySelectorAll(selector);
-        elements.forEach(element => {
-            const computedStyle = window.getComputedStyle(element);
-            const currentMaxWidth = computedStyle.maxWidth;
-            
-            // Only modify if element has a restrictive max-width that's smaller than our target
-            if (currentMaxWidth && currentMaxWidth !== 'none' && parseInt(currentMaxWidth) < wideModeWidth) {
-                element.style.maxWidth = `${wideModeWidth}px`;
-                console.log(`Wide mode: Updated ${selector} from ${currentMaxWidth} to ${wideModeWidth}px`);
-            }
-        });
-    });
-    
-    // Look for conversation-related divs with inline width constraints
-    const constrainedDivs = document.querySelectorAll('[data-testid*="conversation"] div[style*="max-width"], [data-testid*="turn"] div[style*="max-width"]');
-    constrainedDivs.forEach(div => {
-        const style = div.getAttribute('style');
-        if (style && (style.includes('768px') || style.includes('720px') || style.includes('800px') || style.includes('900px'))) {
-            div.style.maxWidth = `${wideModeWidth}px`;
-            console.log('Wide mode: Updated conversation div with inline style');
-        }
-    });
-}
-
-function updateWideMode() {
-    const wideStyleElement = document.getElementById('gemini-enhancer-wide-mode');
-    if (wideStyleElement && wideModeApplied) {
-        // Reapply the styles with new width
-        wideModeApplied = false; // Reset to force reapplication
-        applyWideMode();
-        console.log('Wide mode updated to width:', wideModeWidth);
-    }
-}
-
-function removeWideMode() {
-    console.log('Removing wide mode');
-    const wideStyleElement = document.getElementById('gemini-enhancer-wide-mode');
-    if (wideStyleElement) {
-        wideStyleElement.remove();
-    }
-    
-    // Clear the monitoring interval
-    if (wideModeInterval) {
-        clearInterval(wideModeInterval);
-        wideModeInterval = null;
-    }
-    
-    wideModeApplied = false;
-    console.log('Wide mode removed successfully');
-}
-
-// Apply wide mode on page navigation changes
-const originalPushState = history.pushState;
-const originalReplaceState = history.replaceState;
-
-history.pushState = function() {
-    originalPushState.apply(history, arguments);
-    setTimeout(() => {
-        if (wideModeEnabled) {
-            applyWideMode();
-        }
-    }, 500);
-};
-
-history.replaceState = function() {
-    originalReplaceState.apply(history, arguments);
-    setTimeout(() => {
-        if (wideModeEnabled) {
-            applyWideMode();
-        }
-    }, 500);
-};
-
-window.addEventListener('popstate', () => {
-    setTimeout(() => {
-        if (wideModeEnabled) {
-            applyWideMode();
-        }
-    }, 500);
-});
-
-
-
