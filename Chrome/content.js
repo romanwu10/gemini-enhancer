@@ -57,7 +57,6 @@ class EnhancerState {
             // UI state
             ui: {
                 actionBar: null,
-                contextMenu: null,
                 activeFeature: null
             },
             
@@ -275,331 +274,115 @@ class EventCoordinator {
 
 const eventCoordinator = new EventCoordinator();
 
-// Enhanced Context Menu Integration
-class ContextMenuManager {
-    constructor() {
-        this.contextMenu = null;
-        this.lastSelection = '';
-        this.lastSelectionElement = null;
-    }
-    
-    createContextMenu(text, position) {
-        // Remove existing context menu
-        this.removeContextMenu();
-        
-        const menu = document.createElement('div');
-        menu.className = 'gemini-enhancer-context-menu';
-        menu.innerHTML = `
-            <div class="context-menu-item" data-action="follow-up">
-                <span class="context-icon">↪</span>
-                <span>Ask follow-up</span>
-                <span class="context-shortcut">Ctrl+F</span>
-            </div>
-            <div class="context-menu-item" data-action="explain">
-                <span class="context-icon">💡</span>
-                <span>Explain this</span>
-            </div>
-            <div class="context-menu-item" data-action="examples">
-                <span class="context-icon">📝</span>
-                <span>Get examples</span>
-            </div>
-            <div class="context-menu-separator"></div>
-            <div class="context-menu-item" data-action="copy">
-                <span class="context-icon">📋</span>
-                <span>Copy text</span>
-                <span class="context-shortcut">Ctrl+C</span>
-            </div>
-        `;
-        
-        // Position the menu
-        menu.style.cssText = `
-            position: absolute;
-            left: ${position.x}px;
-            top: ${position.y}px;
-            z-index: 10003;
-            opacity: 0;
-            transform: scale(0.95) translateY(-5px);
-            transition: all 0.15s cubic-bezier(0.4, 0.0, 0.2, 1);
-        `;
-        
-        document.body.appendChild(menu);
-        this.contextMenu = menu;
-        enhancerState.set('ui.contextMenu', menu);
-        
-        // Add event listeners
-        menu.addEventListener('click', (e) => {
-            const item = e.target.closest('.context-menu-item');
-            if (item) {
-                const action = item.dataset.action;
-                this.handleContextAction(action, text);
-            }
-        });
-        
-        // Auto-hide on click outside
-        const hideHandler = (e) => {
-            if (!menu.contains(e.target)) {
-                this.removeContextMenu();
-                document.removeEventListener('click', hideHandler, true);
-            }
-        };
-        setTimeout(() => {
-            document.addEventListener('click', hideHandler, true);
-        }, 100);
-        
-        // Animate in
-        requestAnimationFrame(() => {
-            menu.style.opacity = '1';
-            menu.style.transform = 'scale(1) translateY(0)';
-        });
-        
-        // Ensure menu stays in viewport
-        this.adjustMenuPosition(menu, position);
-        
-        return menu;
-    }
-    
-    adjustMenuPosition(menu, position) {
-        const rect = menu.getBoundingClientRect();
-        const viewport = {
-            width: window.innerWidth,
-            height: window.innerHeight
-        };
-        
-        let { x, y } = position;
-        
-        // Adjust horizontal position
-        if (x + rect.width > viewport.width) {
-            x = viewport.width - rect.width - 16;
-        }
-        
-        // Adjust vertical position
-        if (y + rect.height > viewport.height) {
-            y = y - rect.height - 10; // Show above cursor
-        }
-        
-        menu.style.left = `${Math.max(8, x)}px`;
-        menu.style.top = `${Math.max(8, y)}px`;
-    }
-    
-    removeContextMenu() {
-        if (this.contextMenu) {
-            this.contextMenu.style.opacity = '0';
-            this.contextMenu.style.transform = 'scale(0.95) translateY(-5px)';
-            
-            setTimeout(() => {
-                if (this.contextMenu) {
-                    this.contextMenu.remove();
-                    this.contextMenu = null;
-                    enhancerState.set('ui.contextMenu', null);
-                }
-            }, 150);
-        }
-    }
-    
-    handleContextAction(action, text) {
-        const inputBox = findGeminiInputBox();
-        
-        switch (action) {
-            case 'follow-up':
-                if (inputBox) {
-                    createInlineCitationCard(text, inputBox);
-                }
-                break;
-            case 'explain':
-                if (inputBox) {
-                    insertPromptWithCitation(text, 'explain', inputBox);
-                }
-                break;
-            case 'examples':
-                if (inputBox) {
-                    insertPromptWithCitation(text, 'examples', inputBox);
-                }
-                break;
-            case 'copy':
-                navigator.clipboard.writeText(text).then(() => {
-                    console.log('Text copied to clipboard');
-                });
-                break;
-        }
-        
-        this.removeContextMenu();
-    }
-}
-
-const contextMenuManager = new ContextMenuManager();
+// Context menu functionality removed as requested by user
 
 // Function to determine if selected text is from AI response vs user input
+// Simplified and more reliable function to determine if selected text should trigger action buttons
 function isSelectionFromAIResponse(selection) {
     if (!selection || selection.rangeCount === 0) return false;
     
-    // TEMPORARY: Make it less restrictive for testing - show button for any meaningful selection
     const selectedText = selection.toString().trim();
-    if (selectedText.length >= 3) {
-        console.log('Allowing follow-up button for selection:', selectedText.substring(0, 50) + '...');
-        return true;
+    console.log('🔍 Checking selection:', selectedText.substring(0, 100) + (selectedText.length > 100 ? '...' : ''));
+    
+    // Must be at least 3 characters
+    if (selectedText.length < 3) {
+        console.log('❌ Selection too short (<3 chars)');
+        return false;
+    }
+    
+    // Don't show for very long selections (likely accidental)
+    if (selectedText.length > 1000) {
+        console.log('❌ Selection too long (>1000 chars)');
+        return false;
     }
     
     const range = selection.getRangeAt(0);
     const container = range.commonAncestorContainer;
-    
-    // Find the closest parent element that might indicate content type
     let element = container.nodeType === Node.TEXT_NODE ? container.parentElement : container;
     
-    // Look up the DOM tree to find conversation structure indicators
+    // First, check if we're in an input area (immediate rejection)
     while (element && element !== document.body) {
-        // Common Gemini selectors for AI responses
-        // These are based on Gemini's current DOM structure patterns
-        const classList = element.classList ? Array.from(element.classList) : [];
+        const tagName = element.tagName?.toLowerCase();
+        const isEditable = element.contentEditable === 'true';
         const role = element.getAttribute('role');
-        const dataRole = element.getAttribute('data-role');
         
-        // Check for AI response indicators
+        // Block if clearly in input/editable area
         if (
-            // Gemini uses these patterns for AI responses
-            classList.some(cls => cls.includes('model-response') || 
-                               cls.includes('assistant') || 
-                               cls.includes('response') ||
-                               cls.includes('message-content') ||
-                               cls.includes('model-turn') ||
-                               cls.includes('conversation-turn') ||
-                               cls.includes('response-container')) ||
-            role === 'presentation' ||
-            dataRole === 'assistant' ||
-            dataRole === 'model' ||
-            element.tagName === 'MESSAGE-CONTENT' ||
-            element.tagName === 'MODEL-RESPONSE' ||
-            // Look for specific Gemini response containers
-            element.querySelector('[data-message-author-role="model"]') ||
-            element.closest('[data-message-author-role="model"]') ||
-            element.closest('[role="presentation"]') ||
-            // Check for Gemini-specific response indicators
-            element.closest('.model-response-text') ||
-            element.closest('.response-container') ||
-            element.closest('.conversation-turn[data-role="model"]')
-        ) {
-            console.log('Detected AI response element:', element.tagName, element.className);
-            return true;
-        }
-        
-        // Check for user input indicators (should return false)
-        if (
-            classList.some(cls => cls.includes('user-input') || 
-                               cls.includes('user-message') ||
-                               cls.includes('user-turn') ||
-                               cls.includes('input') ||
-                               cls.includes('prompt') ||
-                               cls.includes('user-query')) ||
-            dataRole === 'user' ||
-            element.closest('[data-message-author-role="user"]') ||
+            tagName === 'textarea' ||
+            tagName === 'input' ||
+            isEditable ||
+            role === 'textbox' ||
             element.closest('[contenteditable="true"]') ||
-            element.closest('[role="textbox"]') ||
-            element.closest('.conversation-turn[data-role="user"]') ||
-            element.closest('.user-message') ||
-            element.closest('.user-turn') ||
-            element.tagName === 'TEXTAREA' ||
-            element.tagName === 'INPUT'
+            element.closest('textarea, input, [role="textbox"]')
         ) {
-            console.log('Detected user input element, blocking Follow-up button:', element.tagName, element.className);
+            console.log('❌ Selection in input/editable area:', tagName);
             return false;
         }
         
         element = element.parentElement;
     }
     
-    // Fallback: Use heuristics to determine if this is likely an AI response
-    const selectionText = selection.toString().trim();
+    // Check distance from input areas
     const selectionRect = range.getBoundingClientRect();
-    
-    // Check distance from input areas - if too close, likely user input
     const inputElements = document.querySelectorAll('textarea, input, [contenteditable="true"], [role="textbox"]');
     
     for (const input of inputElements) {
+        // Skip if input is not visible
+        if (input.offsetParent === null) continue;
+        
         const inputRect = input.getBoundingClientRect();
         const distance = Math.sqrt(
             Math.pow(selectionRect.left - inputRect.left, 2) + 
             Math.pow(selectionRect.top - inputRect.top, 2)
         );
         
-        // If selection is very close to an input, likely user input
-        // Be more lenient with short selections as they might be technical terms
-        const proximityThreshold = selectionText.length <= 10 ? 50 : 100;
+        // Be more restrictive for very close selections
+        const proximityThreshold = 80;
         if (distance < proximityThreshold) {
-            console.log(`Selection too close to input element (${distance.toFixed(0)}px < ${proximityThreshold}px), blocking Follow-up button`);
+            console.log(`❌ Selection too close to input (${distance.toFixed(0)}px < ${proximityThreshold}px)`);
             return false;
         }
     }
     
-    // Check if selection contains typical AI response patterns
-    const aiResponsePatterns = [
-        /I'd be happy to help/i,
-        /Here's what/i,
-        /According to/i,
-        /Based on/i,
-        /Let me explain/i,
-        /To answer your question/i,
-        /The answer is/i,
-        /You can/i,
-        /This means/i,
-        /In other words/i,
-        // Short-form patterns that often appear in AI responses
-        /^However/i,
-        /^Additionally/i,
-        /^Furthermore/i,
-        /^Therefore/i,
-        /^Essentially/i,
-        /^Basically/i
-    ];
+    // More permissive approach: Allow most text selections that aren't in input areas
+    // This makes the feature much more reliable and responsive to user selections
     
-    const hasAIPattern = aiResponsePatterns.some(pattern => pattern.test(selectionText));
+    // Allow if text contains common content patterns
+    const hasGoodPatterns = 
+        // Technical/code patterns
+        /[a-zA-Z_]\w*\(|\w+\.\w+|function|class|const|let|var|import|export/i.test(selectedText) ||
+        // Structured content patterns
+        /^\d+\.|^\*|^-|\*\*|\`|```|^#{1,6}\s|^\s*[\-\*\+]/m.test(selectedText) ||
+        // Common explanatory phrases
+        /\b(based on|according to|for example|specifically|however|therefore|because)\b/i.test(selectedText) ||
+        // Has some punctuation indicating complete thoughts
+        /[.!?;:]/.test(selectedText) ||
+        // Contains multiple words (not just random characters)
+        /\b\w+\s+\w+/.test(selectedText);
     
-    // Check if selection contains typical user input patterns
-    const userInputPatterns = [
-        /^How do I/i,
-        /^What is/i,
-        /^Can you/i,
-        /^Please/i,
-        /^I want/i,
-        /^I need/i,
-        /^Could you/i,
-        /\?$/  // Ends with question mark
-    ];
-    
-    const hasUserPattern = userInputPatterns.some(pattern => pattern.test(selectionText));
-    
-    // For very short selections (single words), be less strict about user patterns
-    // unless they're clearly questions
-    if (hasUserPattern && (selectionText.length > 10 || selectionText.includes('?'))) {
-        console.log('Selection matches user input pattern, blocking Follow-up button');
-        return false;
+    if (hasGoodPatterns) {
+        console.log('✅ Selection contains good content patterns');
+        return true;
     }
     
-    // For shorter selections, be more permissive if they don't match user patterns
-    // Single words or short phrases can be valuable for follow-ups (e.g., technical terms)
-    const isSubstantial = selectionText.length >= 3;
+    // Allow shorter technical terms or single words if they look meaningful
+    if (selectedText.length <= 50) {
+        // Technical terms, camelCase, constants, etc.
+        const isTechnical = /^[A-Z_][A-Z_]*$|^[a-z]+[A-Z][a-zA-Z]*$|^[a-zA-Z]+[0-9]+|^\w+\(\)$/.test(selectedText);
+        if (isTechnical) {
+            console.log('✅ Selection looks like technical term');
+            return true;
+        }
+    }
     
-    // Special handling for single words that are likely technical terms or concepts
-    const isSingleWord = selectionText.split(/\s+/).length === 1;
-    const looksLikeTechnicalTerm = isSingleWord && (
-        /^[A-Z][a-z]+$/.test(selectionText) ||  // Capitalized word
-        /^[a-z]+[A-Z]/.test(selectionText) ||   // camelCase
-        /^[A-Z_]+$/.test(selectionText) ||      // CONSTANT_CASE
-        /^[a-z-]+$/.test(selectionText) ||      // kebab-case
-        selectionText.length > 6                // Longer single words are often technical
-    );
+    // Final catch-all: Allow selections that are reasonable length and contain letters
+    if (selectedText.length >= 5 && /[a-zA-Z]{3,}/.test(selectedText)) {
+        console.log('✅ Reasonable text selection allowed');
+        return true;
+    }
     
-    const result = hasAIPattern || (isSubstantial && !hasUserPattern) || looksLikeTechnicalTerm;
-    
-    console.log('Fallback AI response detection:', { 
-        hasAIPattern, 
-        hasUserPattern, 
-        isSubstantial,
-        isSingleWord,
-        looksLikeTechnicalTerm,
-        result,
-        textSample: selectionText.length > 50 ? selectionText.substring(0, 50) + '...' : selectionText
-    });
-    
-    return result;
+    console.log('❌ Selection did not meet any criteria');
+    return false;
 }
 
 // Note: browserAPI and legacy variables are now declared at the top
@@ -689,13 +472,18 @@ async function loadSlashCommands() {
 // Improved Event Management with Cleanup
 function initializeEventListeners() {
     const events = [
+        // Primary selection events
         { type: 'mouseup', handler: handleTextSelection, options: { passive: true } },
         { type: 'mousedown', handler: handleMouseDown, options: { passive: true } },
         { type: 'selectionchange', handler: handleSelectionChange, options: { passive: true } },
-        { type: 'contextmenu', handler: handleContextMenu, options: { passive: false } },
+        
+        // Additional selection events for better reliability
+        { type: 'touchend', handler: handleTextSelection, options: { passive: true } },  // Mobile support
+        { type: 'keyup', handler: handleKeyboardSelection, options: { passive: true } }, // Keyboard selection
+        
+        // Other events
         { type: 'input', handler: handleInputChange, options: { capture: true, passive: true } },
         { type: 'keydown', handler: handleKeyDown, options: { capture: true, passive: false } },
-        { type: 'keyup', handler: handleKeyUp, options: { passive: true } },
         { type: 'click', handler: handleDocumentClick, options: { capture: true, passive: true } },
         { type: 'focusout', handler: handleFocusOut, options: { passive: true } }
     ];
@@ -952,29 +740,7 @@ function handleMouseDown(event) {
     }
 }
 
-function handleContextMenu(event) {
-    const selection = window.getSelection();
-    const selectedText = selection.toString().trim();
-    
-    // Only show our context menu for AI response text selections
-    if (selectedText && selectedText.length >= 3 && isSelectionFromAIResponse(selection)) {
-        // Prevent default context menu
-        event.preventDefault();
-        event.stopPropagation();
-        
-        // Show our custom context menu
-        const position = {
-            x: event.clientX,
-            y: event.clientY
-        };
-        
-        contextMenuManager.createContextMenu(selectedText, position);
-        console.log('Custom context menu shown for AI response text');
-        return false;
-    }
-    
-    // For non-AI content, let the default context menu show
-}
+// Context menu handler removed as requested by user
 
 function handleSelectionChange() {
     // Clear any existing stability timeout
@@ -1071,78 +837,117 @@ function updateButtonPosition() {
 }
 
 function handleTextSelection(event) {
-    console.log('handleTextSelection called with event:', event.type);
+    console.log('📝 handleTextSelection called with event:', event.type, 'target:', event.target?.tagName);
     
     // Clear any existing timeout
     if (selectionTimeout) {
         clearTimeout(selectionTimeout);
     }
     
-    // Debounce selection handling for better performance
+    // Debounce selection handling for better performance and reliability
     selectionTimeout = setTimeout(() => {
-        const selectedText = window.getSelection().toString().trim();
-        console.log('Processing selection:', selectedText.length > 0 ? selectedText.substring(0, 30) + '...' : 'No selection');
-
-        // If clicking on the follow-up button, don't interfere
-        if (followUpButton && followUpButton.contains(event.target)) {
-            return;
-        }
-
-        // If we have meaningful selected text FROM AI RESPONSE, create or keep the button
-        if (selectedText && selectedText.length >= 3) {
+        try {
             const selection = window.getSelection();
-            
-            // Only proceed if selection is from AI response
-            if (!isSelectionFromAIResponse(selection)) {
-                console.log('Selection is from user input, not showing Follow-up button');
+            const selectedText = selection.toString().trim();
+            console.log('📝 Processing selection:', selectedText.length > 0 ? `"${selectedText.substring(0, 50)}${selectedText.length > 50 ? '...' : ''}"` : 'No selection');
+
+            // If clicking on the follow-up button container, don't interfere
+            const followUpContainer = enhancerState.get('followUp.button');
+            if (followUpContainer && (followUpContainer.contains(event.target) || followUpContainer === event.target)) {
+                console.log('📝 Click was on follow-up button, ignoring');
                 return;
-            }
-            
-            // If button already exists and text hasn't changed significantly, just update position
-            // But allow for larger changes in case of drag-extended selections
-            if (followUpButton && Math.abs(selectedText.length - lastSelectedText.length) < 20) {
-                lastSelectedText = selectedText;
-                updateButtonPosition();
-                
-                // Log selection changes for debugging drag extensions
-                if (selectedText !== lastSelectedText) {
-                    console.log('Selection updated:', { 
-                        from: lastSelectedText.substring(0, 30) + '...', 
-                        to: selectedText.substring(0, 30) + '...',
-                        lengthChange: selectedText.length - lastSelectedText.length
-                    });
-                }
-                return;
-            }
-            
-            // Remove existing button and create new one
-            if (followUpButton) {
-                // Clear any stability timeout since we're creating a new button
-                if (buttonStabilityTimeout) {
-                    clearTimeout(buttonStabilityTimeout);
-                    buttonStabilityTimeout = null;
-                }
-                removeFollowUpButton();
             }
 
-            if (selection.rangeCount > 0) {
-                const range = selection.getRangeAt(0);
-                const rect = range.getBoundingClientRect();
+            // If we have meaningful selected text, check if it should trigger buttons
+            if (selectedText && selectedText.length >= 3) {
+                // Only proceed if selection should trigger action buttons
+                if (!isSelectionFromAIResponse(selection)) {
+                    console.log('📝 Selection blocked by AI response filter');
+                    // Remove button if it exists and selection is not valid
+                    if (followUpContainer) {
+                        removeFollowUpButton();
+                    }
+                    return;
+                }
                 
-                // Only show button if selection is visible on screen
-                if (rect.width > 0 && rect.height > 0) {
+                // Check if button already exists for similar text
+                const existingButton = enhancerState.get('followUp.button');
+                if (existingButton && Math.abs(selectedText.length - lastSelectedText.length) < 50) {
+                    // Update position for existing button if text is similar
                     lastSelectedText = selectedText;
-                    console.log('Creating Follow-up button for AI response selection:', selectedText.substring(0, 50) + '...');
-                    createFollowUpButton(selectedText);
+                    updateButtonPosition();
+                    console.log('📝 Updated existing button position');
+                    return;
+                }
+                
+                // Remove existing button before creating new one
+                if (existingButton) {
+                    console.log('📝 Removing existing button to create new one');
+                    const stabilityTimeout = enhancerState.get('followUp.stabilityTimeout');
+                    if (stabilityTimeout) {
+                        clearTimeout(stabilityTimeout);
+                        enhancerState.set('followUp.stabilityTimeout', null);
+                    }
+                    removeFollowUpButton();
+                }
+
+                // Validate selection has proper range and is visible
+                if (selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0);
+                    const rect = range.getBoundingClientRect();
+                    
+                    // Only show button if selection is visible on screen and has dimensions
+                    if (rect.width > 0 && rect.height > 0 && 
+                        rect.top >= 0 && rect.left >= 0 && 
+                        rect.top < window.innerHeight && rect.left < window.innerWidth) {
+                        
+                        lastSelectedText = selectedText;
+                        console.log('📝 Creating action buttons for valid selection');
+                        createFollowUpButton(selectedText);
+                    } else {
+                        console.log('📝 Selection not visible or has no dimensions');
+                    }
+                }
+            } else if (selectedText.length === 0) {
+                // No selection - remove button if it exists
+                const existingButton = enhancerState.get('followUp.button');
+                if (existingButton) {
+                    console.log('📝 No selection, scheduling button removal');
+                    // Don't remove immediately - let handleSelectionChange handle it with stability timeout
                 }
             }
+        } catch (error) {
+            console.error('📝 Error in handleTextSelection:', error);
         }
-        // If no meaningful selection, let handleSelectionChange deal with button removal
-    }, 150); // Increased debounce to 150ms for better stability
+    }, 100); // Reduced debounce for better responsiveness
+}
+
+// Handle keyboard-based text selection (Shift+arrows, Ctrl+A, etc.)
+function handleKeyboardSelection(event) {
+    console.log('⌨️ handleKeyboardSelection called with key:', event.key);
+    
+    // Only handle keys that might change selection
+    const selectionKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'];
+    const modifierKeys = event.shiftKey || event.ctrlKey || event.metaKey;
+    
+    if (selectionKeys.includes(event.key) && modifierKeys) {
+        console.log('⌨️ Keyboard selection detected, checking text selection');
+        
+        // Small delay to let selection update
+        setTimeout(() => {
+            const selection = window.getSelection();
+            const selectedText = selection.toString().trim();
+            
+            if (selectedText && selectedText.length >= 3) {
+                console.log('⌨️ Keyboard selection has text, triggering handleTextSelection');
+                handleTextSelection({ type: 'keyboardselection', target: document.activeElement || document.body });
+            }
+        }, 10);
+    }
 }
 
 function createFollowUpButton(text) {
-    console.log('Creating follow-up button for text:', text.substring(0, 50) + '...');
+    console.log('Creating follow-up action buttons for text:', text.substring(0, 50) + '...');
     
     // Check if we can activate this feature
     if (!eventCoordinator.canActivateFeature('follow-up')) {
@@ -1150,10 +955,10 @@ function createFollowUpButton(text) {
         return;
     }
     
-    // Create button element
-    followUpButton = document.createElement('button');
-    followUpButton.id = 'followUpButton';
-    followUpButton.innerHTML = 'Follow-up';
+    // Create container for the three buttons
+    followUpButton = document.createElement('div');
+    followUpButton.id = 'followUpButtonContainer';
+    followUpButton.className = 'gemini-enhancer-action-buttons';
     
     // Store in state
     enhancerState.set('followUp.button', followUpButton);
@@ -1161,7 +966,92 @@ function createFollowUpButton(text) {
     // Store original text for debugging and fallback
     followUpButton.dataset.originalText = text;
     
-    // Position the button above the selection with native spacing
+    // Define the three action buttons
+    const actions = [
+        { id: 'askAbout', text: 'Ask about this', prompt: 'Can you tell me more about this: "{text}"?' },
+        { id: 'explainFurther', text: 'Explain further', prompt: 'Please explain this in more detail: "{text}"' },
+        { id: 'giveExamples', text: 'Give examples', prompt: 'Can you give me some examples related to: "{text}"?' }
+    ];
+    
+    // Create individual buttons
+    actions.forEach((action, index) => {
+        const button = document.createElement('button');
+        button.id = `followUpAction_${action.id}`;
+        button.className = 'gemini-enhancer-action-btn';
+        button.innerHTML = action.text;
+        button.dataset.prompt = action.prompt;
+        
+        // Add click handler for each button
+        button.onclick = function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            // Get the current selection at click time
+            const currentSelection = window.getSelection();
+            const currentText = currentSelection.toString().trim();
+            
+            // Use current selection if valid, otherwise fall back to original
+            let textToUse = text;
+            const originalText = followUpButton.dataset.originalText;
+            
+            if (currentText && currentText.length >= 3 && isSelectionFromAIResponse(currentSelection)) {
+                textToUse = currentText;
+                console.log("Using current selection for action:", action.id, textToUse.substring(0, 30) + '...');
+            } else {
+                console.log("Using original selection for action:", action.id, textToUse.substring(0, 30) + '...');
+            }
+            
+            // Generate the prompt text
+            const promptText = action.prompt.replace('{text}', textToUse);
+            console.log("Generated prompt:", promptText);
+            
+            // Add click feedback
+            button.style.transform = 'translateY(0) scale(0.95)';
+            
+            setTimeout(() => {
+                // Find input box and insert the generated text
+                const inputBox = findGeminiInputBox();
+                if (inputBox) {
+                    // Clear any existing content and insert the new prompt
+                    inputBox.value = '';
+                    inputBox.textContent = '';
+                    
+                    // Insert the text
+                    if (inputBox.tagName === 'TEXTAREA') {
+                        inputBox.value = promptText;
+                        inputBox.dispatchEvent(new Event('input', { bubbles: true }));
+                    } else {
+                        inputBox.textContent = promptText;
+                        inputBox.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                    
+                    // Focus the input box
+                    inputBox.focus();
+                    
+                    // Set cursor to end
+                    if (inputBox.setSelectionRange) {
+                        inputBox.setSelectionRange(promptText.length, promptText.length);
+                    } else if (window.getSelection) {
+                        const selection = window.getSelection();
+                        selection.removeAllRanges();
+                        const range = document.createRange();
+                        range.selectNodeContents(inputBox);
+                        range.collapse(false);
+                        selection.addRange(range);
+                    }
+                    
+                    enhancerState.emit('promptGenerated', { action: action.id, text: textToUse, prompt: promptText });
+                } else {
+                    console.warn('Could not find input box');
+                }
+                removeFollowUpButton();
+            }, 100);
+        };
+        
+        followUpButton.appendChild(button);
+    });
+    
+    // Position the button container above the selection
     let preferredPosition = { top: 100, left: 100 }; // Default position
     
     const selection = window.getSelection();
@@ -1171,17 +1061,17 @@ function createFollowUpButton(text) {
         
         // Calculate optimal position
         preferredPosition = {
-            top: window.scrollY + rect.top - 44, // 44px above for better spacing
+            top: window.scrollY + rect.top - 54, // 54px above to accommodate three buttons
             left: window.scrollX + rect.left
         };
         
         // Use event coordinator to resolve UI conflicts
         const adjustedPosition = eventCoordinator.requestUISpace('follow-up', followUpButton, preferredPosition);
         
-        // Ensure button doesn't go off screen
+        // Ensure container doesn't go off screen
         const viewportWidth = window.innerWidth;
-        const buttonWidth = 120; // Approximate button width
-        const finalLeft = Math.min(adjustedPosition.left, viewportWidth - buttonWidth - 16);
+        const containerWidth = 320; // Approximate container width for three buttons
+        const finalLeft = Math.min(adjustedPosition.left, viewportWidth - containerWidth - 16);
         
         followUpButton.style.position = 'absolute';
         followUpButton.style.left = `${Math.max(8, finalLeft)}px`;
@@ -1202,54 +1092,6 @@ function createFollowUpButton(text) {
     followUpButton.addEventListener('mouseleave', () => {
         enhancerState.set('followUp.isHoveringButton', false);
     });
-    
-    followUpButton.onclick = function(event) {
-        event.preventDefault();
-        event.stopPropagation();
-        
-        // Get the current selection at click time, not creation time
-        // This handles cases where user extends selection after button appears
-        const currentSelection = window.getSelection();
-        const currentText = currentSelection.toString().trim();
-        
-        // Use current selection if it exists and is from AI response, otherwise fall back to original
-        let textToUse = text;
-        const originalText = followUpButton.dataset.originalText;
-        
-        if (currentText && currentText.length >= 3 && isSelectionFromAIResponse(currentSelection)) {
-            textToUse = currentText;
-            console.log("Using current selection:", {
-                original: originalText?.substring(0, 30) + '...',
-                current: textToUse.substring(0, 30) + '...',
-                lengthChange: textToUse.length - (originalText?.length || 0)
-            });
-        } else if (currentText && currentText !== originalText) {
-            console.log("Current selection rejected (not from AI response):", {
-                current: currentText.substring(0, 30) + '...',
-                usingOriginal: textToUse.substring(0, 30) + '...'
-            });
-        } else {
-            console.log("Using original selection:", textToUse.substring(0, 30) + '...');
-        }
-        
-        console.log("Follow-up button final text:", textToUse);
-        
-        // Add click feedback
-        followUpButton.style.transform = 'translateY(0) scale(0.95)';
-        
-        setTimeout(() => {
-            // Find input box and show enhanced citation card instead of just pasting text
-            const inputBox = findGeminiInputBox();
-            if (inputBox) {
-                createInlineCitationCard(textToUse, inputBox);
-                enhancerState.emit('citationCreated', { text: textToUse, inputBox });
-            } else {
-                // Fallback to old method if input box not found
-                insertTextIntoInputBox(textToUse);
-            }
-            removeFollowUpButton();
-        }, 100);
-    };
 
     document.body.appendChild(followUpButton);
     

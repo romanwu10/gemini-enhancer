@@ -13,8 +13,9 @@ A Chrome extension that enhances your experience with AI chat interfaces like Ge
 
 ### 1. Follow-up Helper
 - Select any text on Gemini
-- Click the stylish "Follow-up" button that appears
-- Automatically inserts the selected text as a quoted citation in the chat input
+- Choose from three action buttons that appear: "Ask about this", "Explain further", or "Give examples"
+- Each button automatically generates an appropriate prompt and inserts it into the chat input
+- No more manual typing - just select text and click your preferred action!
 
 ### 2. Slash Commands
 Create custom shortcuts for frequently used prompts! Type `/` followed by your command name to quickly insert predefined prompts.
@@ -90,6 +91,8 @@ The extension consists of:
 
 ## Version History
 
+- **v1.4** - Enhanced follow-up system with three action buttons: "Ask about this", "Explain further", "Give examples"
+- **v1.3** - Enhanced Gemini Enhancer with Wide Mode and UI improvements 
 - **v1.2** - Updated to Manifest V3, removed Claude.ai support, improved clipboard API usage
 - **v1.1** - Added slash commands feature with autocomplete
 - **v1.0** - Initial release with follow-up helper
