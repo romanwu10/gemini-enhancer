@@ -64,7 +64,8 @@
 
 /* Show animation - enable transitions and animate */
 #followUpButton.show {
-    transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+    transition: opacity 0.2s cubic-bezier(0.4, 0.0, 0.2, 1),
+                transform 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
     opacity: 1;
     transform: translateY(0) scale(1);
     pointer-events: auto;
@@ -114,7 +115,8 @@
 
 /* Show animation for action buttons container */
 .gemini-enhancer-action-buttons.show {
-    transition: all 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+    transition: opacity 0.2s cubic-bezier(0.4, 0.0, 0.2, 1),
+                transform 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
     opacity: 1;
     transform: translateY(0) scale(1);
     pointer-events: auto;

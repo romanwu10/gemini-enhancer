@@ -858,7 +858,7 @@ function updateButtonPosition() {
         const currentLeft = parseFloat(followUpButton.style.left) || 0;
         const currentTop = parseFloat(followUpButton.style.top) || 0;
         
-        if (Math.abs(currentLeft - finalLeft) > 5 || Math.abs(currentTop - finalTop) > 5) {
+        if (Math.abs(currentLeft - finalLeft) > 1 || Math.abs(currentTop - finalTop) > 1) {
             followUpButton.style.left = `${Math.max(0, finalLeft)}px`;
             followUpButton.style.top = `${Math.max(0, finalTop)}px`;
             console.log(`📝 Button positioned at (${finalLeft.toFixed(0)}, ${finalTop.toFixed(0)})`);
@@ -1226,8 +1226,8 @@ function removeFollowUpButton() {
         // Remove show class to trigger hide animation
         followUpButton.classList.remove('show');
         
-        // Apply explicit hide styles to ensure smooth transition
-        followUpButton.style.transition = 'all 0.15s cubic-bezier(0.4, 0.0, 0.2, 1)';
+        // Apply explicit hide styles to ensure smooth transition (no left/top animation)
+        followUpButton.style.transition = 'opacity 0.15s cubic-bezier(0.4, 0.0, 0.2, 1), transform 0.15s cubic-bezier(0.4, 0.0, 0.2, 1)';
         followUpButton.style.opacity = '0';
         followUpButton.style.transform = 'translateY(8px) scale(0.9)';
         
