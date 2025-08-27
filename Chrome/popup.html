@@ -322,6 +322,11 @@
     
     <div class="section">
         <h2 class="section-header">Slash Commands</h2>
+        <div id="toolbar" style="display:flex; gap:8px; align-items:center; padding: 0 24px 12px;">
+            <button id="exportCommands" class="delete-btn" style="border-color: var(--border-default);">Export</button>
+            <button id="importCommands" class="delete-btn" style="border-color: var(--border-default);">Import</button>
+            <input id="importFile" type="file" accept="application/json" style="display:none;" />
+        </div>
         <div id="commandsList">
             <div class="empty-state">No commands yet. Add one below!</div>
         </div>

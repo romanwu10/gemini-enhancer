@@ -4,12 +4,15 @@ A Chrome extension that enhances your experience with AI chat interfaces like Ge
 
 **Updated to Manifest V3** for continued Chrome support through 2025 and beyond.
 
+v1.7: Polished native-feel UI, improved reliability (no duplicate injections on SPA navigations), accessible slash command dropdown (ARIA roles, keyboard-friendly), non-blocking toasts instead of alerts, autosave on tab hide, and robust dark/light styling (removed unsupported light-dark()).
+
 ## Features
 
 ### 🎨 Modern UI & Theme Support
 - **Automatic Theme Detection**: Seamlessly switches between light and dark modes based on your system preferences
 - **Modern Design**: Rounded corners, smooth animations, and a polished interface
 - **Responsive Layout**: Optimized for different screen sizes and browser zoom levels
+ - **Native Feel**: Controls use Chrome/Gemini-like spacing, shadows, and focus rings
 
 ### 1. Follow-up Helper
 - Select any text on Gemini
@@ -46,6 +49,8 @@ Click the extension icon to open the Slash Commands manager where you can:
 - View all your custom commands
 - Add new commands with custom prompts
 - Delete existing commands
+ - Edit commands in place
+ - Import/Export command sets as JSON
 - Use `{text}` placeholder in prompts to insert selected text
 
 #### Creating Custom Commands

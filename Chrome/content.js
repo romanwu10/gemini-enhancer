@@ -1,5 +1,13 @@
 console.log("Gemini Enhancer content script loaded.");
 
+// Prevent double-injection across SPA navigations or extension reloads
+if (window.__GEMINI_ENHANCER_ACTIVE__) {
+    console.log('Gemini Enhancer already active — skipping init.');
+    // Halt further execution in this context to prevent duplicate listeners
+    throw new Error('Gemini Enhancer already initialized');
+}
+window.__GEMINI_ENHANCER_ACTIVE__ = true;
+
 // Safari compatibility: Use browser API if available, fallback to chrome
 const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
 
@@ -12,6 +20,7 @@ let selectionTimeout = null;
 let lastSelectedText = '';
 let buttonStabilityTimeout = null;
 let isHoveringButton = false;
+let isRepositionScheduled = false; // throttle scroll-based reposition
 // Wide mode variables removed
 
 // Centralized State Management System
@@ -118,6 +127,37 @@ class EnhancerState {
 
 // Global state instance
 const enhancerState = new EnhancerState();
+
+// Lightweight in-page toast for non-blocking notifications
+function showToast(message, type = 'info') {
+    try {
+        // Reuse style element if present
+        if (!document.getElementById('ge_toast_styles')) {
+            const style = document.createElement('style');
+            style.id = 'ge_toast_styles';
+            style.textContent = `
+                @keyframes ge_slideInFade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+                @keyframes ge_slideOutFade { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(8px); } }
+                .ge-toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+                  background: #137333; color: #fff; padding: 8px 12px; border-radius: 6px; font: 500 13px 'Google Sans',system-ui,sans-serif;
+                  z-index: 2147483647; box-shadow: 0 2px 8px rgba(0,0,0,.2); opacity: 0; animation: ge_slideInFade .15s ease forwards; }
+                .ge-toast.error { background: #d93025; }
+            `;
+            document.head.appendChild(style);
+        }
+        const el = document.createElement('div');
+        el.className = `ge-toast ${type === 'error' ? 'error' : ''}`;
+        el.textContent = message;
+        document.body.appendChild(el);
+        setTimeout(() => {
+            el.style.animation = 'ge_slideOutFade .15s ease forwards';
+            setTimeout(() => el.remove(), 180);
+        }, 2200);
+    } catch (_) {
+        // Fallback to console if DOM not ready
+        console.log('[Gemini Enhancer]', type, message);
+    }
+}
 
 // Unified Event Coordination System
 class EventCoordinator {
@@ -273,9 +313,10 @@ function isSelectionFromAIResponse(selection) {
     const selectedText = selection.toString().trim();
     console.log('🔍 Checking selection:', selectedText.substring(0, 50) + (selectedText.length > 50 ? '...' : ''));
     
-    // Basic length validation
-    if (selectedText.length < 3 || selectedText.length > 2000) {
-        console.log(`❌ Selection length invalid: ${selectedText.length}`);
+    // Length validation (CJK-friendly): allow 1+ CJK chars or 2+ others
+    const hasCJK = /[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(selectedText);
+    if ((hasCJK ? selectedText.length < 1 : selectedText.length < 2) || selectedText.length > 2000) {
+        console.log(`❌ Selection length invalid for rules, len=${selectedText.length}, hasCJK=${hasCJK}`);
         return false;
     }
     
@@ -306,45 +347,29 @@ function isSelectionFromAIResponse(selection) {
         element = element.parentElement;
     }
     
-    // Simplified proximity check - only block if extremely close to visible inputs
+    // Relaxed proximity rules: only block if the selection actually overlaps
+    // any visible input-like element. This avoids false negatives.
     try {
         const selectionRect = range.getBoundingClientRect();
         if (selectionRect.width === 0 || selectionRect.height === 0) {
             console.log('❌ Selection has no visible dimensions');
             return false;
         }
-        
-        const visibleInputs = document.querySelectorAll('textarea:not([style*="display: none"]), input:not([style*="display: none"]), [contenteditable="true"]:not([style*="display: none"]), [role="textbox"]:not([style*="display: none"])');
-        
+        const visibleInputs = document.querySelectorAll(
+            'textarea, input, [contenteditable="true"], [role="textbox"]'
+        );
         for (const input of visibleInputs) {
             if (input.offsetParent === null || !input.getBoundingClientRect) continue;
-            
-            const inputRect = input.getBoundingClientRect();
-            if (inputRect.width === 0 || inputRect.height === 0) continue;
-            
-            // Check if selection overlaps with input area
+            const r = input.getBoundingClientRect();
+            if (r.width === 0 || r.height === 0) continue;
             const overlap = !(
-                selectionRect.right < inputRect.left ||
-                selectionRect.left > inputRect.right ||
-                selectionRect.bottom < inputRect.top ||
-                selectionRect.top > inputRect.bottom
+                selectionRect.right < r.left ||
+                selectionRect.left > r.right ||
+                selectionRect.bottom < r.top ||
+                selectionRect.top > r.bottom
             );
-            
             if (overlap) {
-                console.log('❌ Selection overlaps with input area');
-                return false;
-            }
-            
-            // Only reject if very close (within 50px) to focused or large input areas
-            const distance = Math.min(
-                Math.abs(selectionRect.left - inputRect.left),
-                Math.abs(selectionRect.right - inputRect.right),
-                Math.abs(selectionRect.top - inputRect.top),
-                Math.abs(selectionRect.bottom - inputRect.bottom)
-            );
-            
-            if (distance < 50 && (input === document.activeElement || inputRect.height > 50)) {
-                console.log(`❌ Selection too close to active/large input (${distance.toFixed(0)}px)`);
+                console.log('❌ Selection overlaps with an input area');
                 return false;
             }
         }
@@ -456,6 +481,12 @@ function initializeEventListeners() {
         // Additional selection events for better reliability
         { type: 'touchend', handler: handleTextSelection, options: { passive: true } },  // Mobile support
         { type: 'keyup', handler: handleKeyboardSelection, options: { passive: true } }, // Keyboard selection
+        // Keyup handler for slash command lifecycle (hide/show on release)
+        { type: 'keyup', handler: handleKeyUp, options: { capture: true, passive: true } },
+        // Capture scroll/gesture events on any container to keep overlays in sync
+        { type: 'scroll', handler: handleAnyScroll, options: { capture: true, passive: true } },
+        { type: 'wheel', handler: handleAnyScroll, options: { capture: true, passive: true } },
+        { type: 'touchmove', handler: handleAnyScroll, options: { capture: true, passive: true } },
         
         // Other events
         { type: 'input', handler: handleInputChange, options: { capture: true, passive: true } },
@@ -471,6 +502,33 @@ function initializeEventListeners() {
         });
     });
     
+    // Reposition UI on resize/scroll for native feel
+    const onViewportChange = () => {
+        try {
+            // Reposition slash autocomplete if visible
+            if (commandAutocomplete && commandAutocomplete.style.display === 'block' && enhancerState.get('slashCommands.lastInputBox')) {
+                positionAutocomplete(enhancerState.get('slashCommands.lastInputBox'));
+            }
+            // Reposition follow-up button near selection if present
+            updateButtonPosition();
+        } catch (_) { /* noop */ }
+    };
+    window.addEventListener('resize', onViewportChange);
+    window.addEventListener('scroll', onViewportChange, { passive: true });
+    enhancerState.addCleanup(() => {
+        window.removeEventListener('resize', onViewportChange);
+        window.removeEventListener('scroll', onViewportChange, { passive: true });
+    });
+
+    // Save autosave buffer when tab becomes hidden
+    const onVisibility = () => {
+        if (document.visibilityState === 'hidden') {
+            saveInputContent();
+        }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    enhancerState.addCleanup(() => document.removeEventListener('visibilitychange', onVisibility));
+
     console.log('Event listeners initialized with cleanup');
 }
 
@@ -763,10 +821,10 @@ function updateButtonPosition() {
         // Skip if selection is not visible
         if (rect.width === 0 || rect.height === 0) return;
         
-        // Get container dimensions
-        const containerWidth = 320;
-        const containerHeight = 48;
-        const margin = 8;
+    // Get container dimensions dynamically
+    const containerWidth = followUpButton.offsetWidth || 320;
+    const containerHeight = followUpButton.offsetHeight || 48;
+    const margin = 8;
         
         // Calculate position above selection
         let buttonTop = rect.top - containerHeight - margin;
@@ -810,6 +868,18 @@ function updateButtonPosition() {
     }
 }
 
+// Capture scroll from any scrollable container and keep follow-up button in sync
+function handleAnyScroll() {
+    const btn = enhancerState.get('followUp.button');
+    if (!btn) return;
+    if (isRepositionScheduled) return;
+    isRepositionScheduled = true;
+    requestAnimationFrame(() => {
+        isRepositionScheduled = false;
+        updateButtonPosition();
+    });
+}
+
 function handleTextSelection(event) {
     console.log('📝 handleTextSelection called with event:', event.type, 'target:', event.target?.tagName);
     
@@ -833,8 +903,10 @@ function handleTextSelection(event) {
                 return;
             }
 
-            // Handle meaningful text selection
-            if (selectedText && selectedText.length >= 3) {
+            // Handle meaningful text selection (CJK-friendly minimal length)
+            const hasCJK = /[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(selectedText);
+            const meetsMinLen = selectedText && (hasCJK ? selectedText.length >= 1 : selectedText.length >= 2);
+            if (meetsMinLen) {
                 // Check if this is a valid selection for follow-up
                 if (!isSelectionFromAIResponse(selection)) {
                     console.log('📝 Selection blocked by AI response filter');
@@ -924,8 +996,9 @@ function handleKeyboardSelection(event) {
         setTimeout(() => {
             const selection = window.getSelection();
             const selectedText = selection.toString().trim();
-            
-            if (selectedText && selectedText.length >= 3) {
+            const hasCJK = /[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/.test(selectedText);
+            const meetsMinLen = selectedText && (hasCJK ? selectedText.length >= 1 : selectedText.length >= 2);
+            if (meetsMinLen) {
                 console.log('⌨️ Keyboard selection has text, processing');
                 handleTextSelection({ type: 'keyboardselection', target: document.activeElement || document.body });
             }
@@ -946,6 +1019,8 @@ function createFollowUpButton(text) {
     followUpButton = document.createElement('div');
     followUpButton.id = 'followUpButtonContainer';
     followUpButton.className = 'gemini-enhancer-action-buttons';
+    followUpButton.setAttribute('role', 'toolbar');
+    followUpButton.setAttribute('aria-label', 'Follow-up actions');
     
     // Store in state
     enhancerState.set('followUp.button', followUpButton);
@@ -967,6 +1042,7 @@ function createFollowUpButton(text) {
         button.className = 'gemini-enhancer-action-btn';
         button.innerHTML = action.text;
         button.dataset.prompt = action.prompt;
+        button.setAttribute('aria-label', action.text);
         
         // Add click handler for each button
         button.onclick = function(event) {
@@ -981,7 +1057,7 @@ function createFollowUpButton(text) {
             let textToUse = text;
             const originalText = followUpButton.dataset.originalText;
             
-            if (currentText && currentText.length >= 3 && isSelectionFromAIResponse(currentSelection)) {
+            if (currentText && isSelectionFromAIResponse(currentSelection)) {
                 textToUse = currentText;
                 console.log("Using current selection for action:", action.id, textToUse.substring(0, 30) + '...');
             } else {
@@ -1056,8 +1132,8 @@ function createFollowUpButton(text) {
         const rect = range.getBoundingClientRect();
         
         if (rect.width > 0 && rect.height > 0) {
-            const containerWidth = 320;
-            const containerHeight = 48;
+            const containerWidth = followUpButton.offsetWidth || 320;
+            const containerHeight = followUpButton.offsetHeight || 48;
             const margin = 8;
             
             // Calculate position above selection
@@ -1112,6 +1188,24 @@ function createFollowUpButton(text) {
         if (followUpButton) {
             followUpButton.classList.add('show');
         }
+    });
+
+    // Keep position synced while user scrolls/resizes (including inner scroll containers)
+    const reposition = () => {
+        if (isRepositionScheduled) return;
+        isRepositionScheduled = true;
+        requestAnimationFrame(() => {
+            isRepositionScheduled = false;
+            updateButtonPosition();
+        });
+    };
+    window.addEventListener('scroll', reposition, { passive: true });
+    document.addEventListener('scroll', reposition, { capture: true, passive: true });
+    window.addEventListener('resize', reposition, { passive: true });
+    enhancerState.addCleanup(() => {
+        window.removeEventListener('scroll', reposition);
+        document.removeEventListener('scroll', reposition, true);
+        window.removeEventListener('resize', reposition);
     });
 }
 
@@ -1384,21 +1478,15 @@ function insertTextIntoInputBox(text) {
         if (success) {
             console.log(`Successfully inserted citation: "${citationText}" into input box`);
         } else {
-            alert("Failed to insert citation. Please try copying manually.");
+            showToast("Could not insert citation. Copied to clipboard.", 'error');
         }
     } else {
-        alert("Follow-up Helper: Could not find the chat input box. Please check console for details.");
+        showToast("Could not find the Gemini input box.", 'error');
     }
 }
 
-// Monitor input changes for slash commands only if not on excluded paths
-if (!isExcludedPath()) {
-    document.addEventListener('input', handleInputChange, true);
-    document.addEventListener('keydown', handleKeyDown, { capture: true, passive: false });
-    document.addEventListener('keyup', handleKeyUp, true);
-    document.addEventListener('click', handleDocumentClick, true);
-    document.addEventListener('focusout', handleFocusOut, true);
-}
+// Slash-command listeners are now registered via initializeEventListeners()
+// to avoid duplicate handlers and race conditions.
 
 function handleInputChange(event) {
     const target = event.target;
@@ -1537,15 +1625,23 @@ function isChatInputBox(element) {
     const hostname = window.location.hostname;
     
     if (hostname.includes('gemini.google.com')) {
-        return element.matches('div[contenteditable="true"][role="textbox"]') ||
-               element.matches('rich-textarea div[contenteditable="true"]') ||
-               element.matches('textarea[placeholder*="Enter a prompt"]');
+        // Be permissive with Gemini's evolving DOM while staying targeted
+        const geminiSelectors = [
+            '#prompt-textarea',
+            'textarea[aria-label*="Message"]',
+            'textarea[aria-label*="Prompt"]',
+            'textarea[placeholder*="Message"]',
+            'textarea[data-testid*="chat-input"]',
+            'div[role="textbox"][aria-label*="Send a message"]',
+            'div[role="textbox"][aria-label*="Prompt"]',
+            'div[role="textbox"][contenteditable="true"]'
+        ].join(',');
+        return element.matches(geminiSelectors) || !!element.closest(geminiSelectors);
     }
     
     // Fallback for any contenteditable or textarea that looks like a chat input
-    return element.matches('div[contenteditable="true"]') ||
-           element.matches('textarea') ||
-           element.matches('input[type="text"]');
+    const fallbackSelectors = 'div[contenteditable="true"], textarea, input[type="text"]';
+    return element.matches(fallbackSelectors) || !!element.closest(fallbackSelectors);
 }
 
 function getInputText(element) {
@@ -1580,6 +1676,10 @@ function getCursorPosition(element) {
 
 function showCommandAutocomplete(inputElement, partial, slashIndex) {
     // Use the legacy variable for compatibility
+    // Keep track of the active input for selection handling
+    lastInputBox = inputElement;
+    enhancerState.set('slashCommands.lastInputBox', inputElement);
+
     const matchingCommands = Object.keys(slashCommands).filter(cmd => 
         cmd.toLowerCase().startsWith(partial)
     );
@@ -1619,32 +1719,35 @@ function showCommandAutocomplete(inputElement, partial, slashIndex) {
     const selectedText = window.getSelection().toString().trim();
     const previewText = selectedText || '[selected text]';
     
-    // Populate with matching commands with enhanced UI and live preview
+    // Populate with matching commands in a native-like list style
     commandAutocomplete.innerHTML = matchingCommands.map((cmd, index) => {
         const commandPrompt = slashCommands[cmd] || '';
         const fullPreview = commandPrompt.replace('{text}', previewText);
-        const truncatedPreview = fullPreview.length > 80 
-            ? fullPreview.substring(0, 80) + '...' 
+        const truncatedPreview = fullPreview.length > 80
+            ? fullPreview.substring(0, 80) + '...'
             : fullPreview;
-        
+        const id = `ge-ac-item-${index}`;
+        const iconLetter = (cmd && cmd[0]) ? cmd[0].toUpperCase() : '•';
         return `
-            <div class="autocomplete-item ${index === 0 ? 'selected' : ''}" data-command="${cmd}" data-full-preview="${fullPreview}">
-                <div class="command-header">
-                    <div class="command-name">
-                        <span class="slash-indicator">/</span>${cmd}
+            <div id="${id}" class="autocomplete-item ${index === 0 ? 'selected' : ''}" role="option" aria-selected="${index === 0 ? 'true' : 'false'}" data-command="${cmd}">
+                <div class="ac-row">
+                    <div class="ac-icon">${iconLetter}</div>
+                    <div class="ac-content">
+                        <div class="ac-title">/${cmd}</div>
+                        <div class="ac-sub">${truncatedPreview}</div>
                     </div>
-                    <div class="keyboard-hint">↵</div>
-                </div>
-                <div class="command-preview">${truncatedPreview}</div>
-                <div class="live-preview" style="display: none;">
-                    <div class="preview-label">Preview:</div>
-                    <div class="preview-content">${fullPreview}</div>
                 </div>
             </div>
         `;
     }).join('');
+
+    // Mark active descendant for a11y
+    const first = commandAutocomplete.querySelector('.autocomplete-item');
+    if (first) {
+        commandAutocomplete.setAttribute('aria-activedescendant', first.id || '');
+    }
     
-    // Add enhanced hover handlers for live preview
+    // Add hover handlers for native-like selection
     commandAutocomplete.querySelectorAll('.autocomplete-item').forEach((item, index) => {
         // Click handlers
         item.addEventListener('click', (event) => {
@@ -1659,37 +1762,16 @@ function showCommandAutocomplete(inputElement, partial, slashIndex) {
             selectCommand(item.dataset.command);
         }, { capture: true });
         
-        // Enhanced hover for live preview
+        // Hover selection
         item.addEventListener('mouseenter', () => {
-            // Update selection state
-            commandAutocomplete.querySelectorAll('.autocomplete-item').forEach(i => 
-                i.classList.remove('selected'));
-            item.classList.add('selected');
-            
-            // Show live preview
-            const livePreview = item.querySelector('.live-preview');
-            if (livePreview) {
-                livePreview.style.display = 'block';
-                // Animate in
-                livePreview.style.opacity = '0';
-                livePreview.style.transform = 'translateY(-5px)';
-                setTimeout(() => {
-                    livePreview.style.transition = 'all 0.2s ease';
-                    livePreview.style.opacity = '1';
-                    livePreview.style.transform = 'translateY(0)';
-                }, 10);
-            }
+            // Update selection state with a11y
+            const items = commandAutocomplete.querySelectorAll('.autocomplete-item');
+            const idx = Array.from(items).indexOf(item);
+            updateSelection(items, Math.max(0, idx));
         });
         
         item.addEventListener('mouseleave', () => {
-            // Hide live preview
-            const livePreview = item.querySelector('.live-preview');
-            if (livePreview) {
-                livePreview.style.opacity = '0';
-                setTimeout(() => {
-                    livePreview.style.display = 'none';
-                }, 200);
-            }
+            // No-op
         });
     });
     
@@ -1702,6 +1784,7 @@ function showCommandAutocomplete(inputElement, partial, slashIndex) {
     
     // Show with smooth animation
     commandAutocomplete.style.display = 'block';
+    commandAutocomplete.setAttribute('aria-expanded', 'true');
     // Force a reflow to ensure the display change is applied
     commandAutocomplete.offsetHeight;
     // Trigger the animation
@@ -1719,8 +1802,14 @@ function showCommandAutocomplete(inputElement, partial, slashIndex) {
 function createAutocompleteDropdown() {
     commandAutocomplete = document.createElement('div');
     commandAutocomplete.id = 'slashCommandAutocomplete';
+    commandAutocomplete.setAttribute('role', 'listbox');
+    commandAutocomplete.setAttribute('aria-label', 'Slash command suggestions');
+    commandAutocomplete.setAttribute('aria-expanded', 'false');
+    commandAutocomplete.setAttribute('aria-live', 'polite');
     // Styles are now handled by the CSS file for better theme support
     document.body.appendChild(commandAutocomplete);
+    // Track in centralized state for coordination
+    try { enhancerState.set('slashCommands.autocomplete', commandAutocomplete); } catch (_) {}
     return commandAutocomplete;
 }
 
@@ -1748,22 +1837,22 @@ function positionAutocomplete(inputElement) {
         }
         
         // Ensure dropdown doesn't go off right edge
-        const dropdownWidth = 600; // Wider dropdown for better content display
+        const dropdownWidth = 420; // Native-like width
         if (caretCoords.left + dropdownWidth > viewportWidth) {
             style.left = `${viewportWidth - dropdownWidth - 10}px`;
         }
         
         style.width = `${dropdownWidth}px`;
-        style.minWidth = '560px';
-        style.maxWidth = '640px';
+        style.minWidth = '360px';
+        style.maxWidth = '480px';
     } else {
         // Fallback to old method if caret coordinates unavailable
         const rect = inputElement.getBoundingClientRect();
         style.left = `${window.scrollX + rect.left}px`;
         style.top = `${window.scrollY + rect.top - dropdownHeight - 8}px`;
-        style.width = '600px';
-        style.minWidth = '560px';
-        style.maxWidth = '640px';
+        style.width = '420px';
+        style.minWidth = '360px';
+        style.maxWidth = '480px';
         
         if (rect.top - dropdownHeight < 0) {
             style.top = `${window.scrollY + rect.bottom + 8}px`;
@@ -1846,7 +1935,12 @@ function getCaretCoordinates(element, caretPos) {
 
 function updateSelection(items, selectedIndex) {
     items.forEach((item, index) => {
-        item.classList.toggle('selected', index === selectedIndex);
+        const isSelected = index === selectedIndex;
+        item.classList.toggle('selected', isSelected);
+        item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+        if (isSelected && item.id && commandAutocomplete) {
+            commandAutocomplete.setAttribute('aria-activedescendant', item.id);
+        }
     });
 }
 
@@ -1960,6 +2054,8 @@ function hideCommandAutocomplete() {
             if (commandAutocomplete) {
                 commandAutocomplete.style.display = 'none';
                 commandAutocomplete.innerHTML = ''; // Clear content to avoid stale state
+                commandAutocomplete.setAttribute('aria-expanded', 'false');
+                commandAutocomplete.setAttribute('aria-activedescendant', '');
             }
         }, 150);
     }

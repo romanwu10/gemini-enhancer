@@ -2,9 +2,9 @@
 #followUpButton {
   position: absolute;
   z-index: 10001;
-  background: light-dark(#ffffff, #3c4043);
-  color: light-dark(#3c4043, #e8eaed);
-  border: 1px solid light-dark(#dadce0, #5f6368);
+  background: #ffffff;
+  color: #3c4043;
+  border: 1px solid #dadce0;
   padding: 6px 12px;
   text-align: center;
   text-decoration: none;
@@ -15,7 +15,7 @@
   font-weight: 500;
   cursor: pointer;
   border-radius: 8px;
-  box-shadow: light-dark(0 1px 3px rgba(60,64,67,.15), 0 1px 3px rgba(0,0,0,.3));
+  box-shadow: 0 1px 3px rgba(60,64,67,.15);
   font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
   line-height: 20px;
   min-height: 32px;
@@ -31,14 +31,14 @@
 }
 
 #followUpButton:hover {
-  background: light-dark(#f8f9fa, #48494a);
-  box-shadow: light-dark(0 2px 6px rgba(60,64,67,.2), 0 2px 6px rgba(0,0,0,.4));
-  border-color: light-dark(#c0c4cc, #6e7175);
+  background: #f8f9fa;
+  box-shadow: 0 2px 6px rgba(60,64,67,.2);
+  border-color: #c0c4cc;
 }
 
 #followUpButton:active {
-  background: light-dark(#f1f3f4, #3c4043);
-  box-shadow: light-dark(0 1px 2px rgba(60,64,67,.15), 0 1px 2px rgba(0,0,0,.3));
+  background: #f1f3f4;
+  box-shadow: 0 1px 2px rgba(60,64,67,.15);
   transform: translateY(0) scale(0.98);
 }
 
@@ -81,7 +81,7 @@
     font-size: 16px;
     line-height: 1;
     margin-right: 2px;
-    color: light-dark(#5f6368, #9aa0a6);
+    color: #5f6368;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -122,9 +122,9 @@
 
 /* Individual action buttons */
 .gemini-enhancer-action-btn {
-  background: light-dark(#ffffff, #3c4043);
-  color: light-dark(#3c4043, #e8eaed);
-  border: 1px solid light-dark(#dadce0, #5f6368);
+  background: #ffffff;
+  color: #3c4043;
+  border: 1px solid #dadce0;
   padding: 6px 10px;
   text-align: center;
   text-decoration: none;
@@ -135,7 +135,7 @@
   font-weight: 500;
   cursor: pointer;
   border-radius: 6px;
-  box-shadow: light-dark(0 1px 3px rgba(60,64,67,.15), 0 1px 3px rgba(0,0,0,.3));
+  box-shadow: 0 1px 3px rgba(60,64,67,.15);
   font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
   line-height: 18px;
   min-height: 28px;
@@ -146,16 +146,22 @@
 }
 
 .gemini-enhancer-action-btn:hover {
-  background: light-dark(#f8f9fa, #48494a);
-  box-shadow: light-dark(0 2px 6px rgba(60,64,67,.2), 0 2px 6px rgba(0,0,0,.4));
-  border-color: light-dark(#c0c4cc, #6e7175);
+  background: #f8f9fa;
+  box-shadow: 0 2px 6px rgba(60,64,67,.2);
+  border-color: #c0c4cc;
   transform: translateY(-1px);
 }
 
 .gemini-enhancer-action-btn:active {
-  background: light-dark(#f1f3f4, #3c4043);
-  box-shadow: light-dark(0 1px 2px rgba(60,64,67,.15), 0 1px 2px rgba(0,0,0,.3));
+  background: #f1f3f4;
+  box-shadow: 0 1px 2px rgba(60,64,67,.15);
   transform: translateY(0) scale(0.96);
+}
+
+/* Focus visible styles for better a11y */
+.gemini-enhancer-action-btn:focus-visible {
+  outline: 3px solid rgba(26,115,232,0.24);
+  outline-offset: 2px;
 }
 
 /* Dark mode styles for action buttons */
@@ -215,22 +221,22 @@
 /* Native Gemini-style Slash Command Autocomplete */
 #slashCommandAutocomplete {
     position: absolute;
-    background: light-dark(#ffffff, #2f2f2f);
-    border: 1px solid light-dark(#dadce0, #5f6368);
-    border-radius: 8px;
-    box-shadow: light-dark(0 2px 10px rgba(60,64,67,.15), 0 2px 10px rgba(0,0,0,.3));
-    max-height: 224px;
+    background: #ffffff;
+    border: 1px solid #dadce0;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(60,64,67,.15);
+    max-height: 320px;
     overflow-y: auto;
     z-index: 10001;
     display: none;
-    min-width: 560px;
-    max-width: 640px;
+    min-width: 360px;
+    max-width: 480px;
     font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
     font-size: 14px;
     line-height: 20px;
     transition: opacity 0.15s cubic-bezier(0.4, 0.0, 0.2, 1), transform 0.15s cubic-bezier(0.4, 0.0, 0.2, 1);
     opacity: 0;
-    transform: translateY(8px) scale(0.95);
+    transform: translateY(8px) scale(0.96);
     pointer-events: auto;
     user-select: none;
     -webkit-user-select: none;
@@ -246,42 +252,30 @@
 
 @media (prefers-color-scheme: dark) {
     #slashCommandAutocomplete {
-        background: #2f2f2f;
+        background: #303134;
         border-color: #5f6368;
-        box-shadow: 0 2px 10px rgba(0,0,0,.3);
+        box-shadow: 0 8px 24px rgba(0,0,0,.4);
     }
 }
 
 .autocomplete-item {
-    padding: 12px 16px;
+    padding: 8px 12px;
     cursor: pointer;
     border: none;
     transition: background-color 0.1s cubic-bezier(0.4, 0.0, 0.2, 1);
     margin: 0;
-    border-radius: 0;
+    border-radius: 8px;
     user-select: none;
     -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
     pointer-events: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    position: relative;
 }
 
-.autocomplete-item:first-child {
-    border-top-left-radius: 8px;
-    border-top-right-radius: 8px;
-}
-
-.autocomplete-item:last-child {
-    border-bottom-left-radius: 8px;
-    border-bottom-right-radius: 8px;
-}
+/* Rounded list visually matches native */
+.autocomplete-item:first-child { border-top-left-radius: 12px; border-top-right-radius: 12px; }
+.autocomplete-item:last-child { border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; }
 
 .autocomplete-item:hover {
-    background-color: light-dark(#f8f9fa, #3c4043);
+    background-color: #f8f9fa;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -290,29 +284,32 @@
     }
 }
 
-.autocomplete-item.selected {
-    background-color: light-dark(#f1f3f4, #3c4043);
+.autocomplete-item.selected { background-color: #f1f3f4; }
+
+/* Improve keyboard focus for autocomplete */
+#slashCommandAutocomplete[role="listbox"] .autocomplete-item[aria-selected="true"] {
+  outline: 2px solid rgba(26,115,232,0.24);
+  outline-offset: -2px;
 }
 
-.autocomplete-item.selected::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 3px;
-    background-color: light-dark(#5f6368, #9aa0a6);
-    border-radius: 0 2px 2px 0;
-}
+@media (prefers-color-scheme: dark) { .autocomplete-item.selected { background-color: #3c4043; } }
 
+/* Native-like list row */
+.ac-row { display: flex; align-items: center; gap: 12px; }
+.ac-icon {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: #e8f0fe; color: #1a73e8; font-weight: 600; font-size: 13px;
+}
 @media (prefers-color-scheme: dark) {
-    .autocomplete-item.selected {
-        background-color: #3c4043;
-    }
-    
-    .autocomplete-item.selected::before {
-        background-color: #9aa0a6;
-    }
+    .ac-icon { background: #3c4043; color: #e8eaed; }
+}
+.ac-content { display: flex; flex-direction: column; }
+.ac-title { font-weight: 500; color: #202124; }
+.ac-sub { font-size: 12px; line-height: 16px; color: #5f6368; }
+@media (prefers-color-scheme: dark) {
+    .ac-title { color: #e8eaed; }
+    .ac-sub { color: #9aa0a6; }
 }
 
 /* Enhanced command header layout */
@@ -325,7 +322,7 @@
 
 .command-name {
     font-weight: 500;
-    color: light-dark(#3c4043, #e8eaed);
+    color: #3c4043;
     font-size: 14px;
     line-height: 20px;
     font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
@@ -336,7 +333,7 @@
 }
 
 .command-name .slash-indicator {
-    color: light-dark(#5f6368, #9aa0a6);
+    color: #5f6368;
     font-weight: 400;
 }
 
@@ -352,7 +349,7 @@
 
 .command-preview {
     font-size: 13px;
-    color: light-dark(#5f6368, #9aa0a6);
+    color: #5f6368;
     line-height: 18px;
     max-height: 36px;
     overflow: hidden;
@@ -379,13 +376,13 @@
 }
 
 #slashCommandAutocomplete::-webkit-scrollbar-thumb {
-    background: light-dark(#dadce0, #5f6368);
+    background: #dadce0;
     border-radius: 4px;
-    border: 2px solid light-dark(#ffffff, #2f2f2f);
+    border: 2px solid #ffffff;
 }
 
 #slashCommandAutocomplete::-webkit-scrollbar-thumb:hover {
-    background: light-dark(#bdc1c6, #80868b);
+    background: #bdc1c6;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -401,11 +398,11 @@
 
 /* Live Preview for Slash Commands */
 .live-preview {
-    background: light-dark(#f8f9fa, #35363a);
+    background: #f8f9fa;
     border-radius: 8px;
     padding: 12px;
     margin-top: 8px;
-    border: 1px solid light-dark(#e8eaed, #5f6368);
+    border: 1px solid #e8eaed;
     max-height: 120px;
     overflow-y: auto;
 }
@@ -420,7 +417,7 @@
 .preview-label {
     font-size: 11px;
     font-weight: 500;
-    color: light-dark(#5f6368, #9aa0a6);
+    color: #5f6368;
     margin-bottom: 4px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -435,7 +432,7 @@
 .preview-content {
     font-size: 13px;
     line-height: 18px;
-    color: light-dark(#3c4043, #e8eaed);
+    color: #3c4043;
     font-style: italic;
     word-wrap: break-word;
 }
@@ -449,11 +446,11 @@
 /* Keyboard shortcut hint - now in header */
 .keyboard-hint {
     font-size: 12px;
-    color: light-dark(#9aa0a6, #5f6368);
+    color: #9aa0a6;
     font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
     opacity: 0;
     transition: opacity 0.1s ease;
-    background: light-dark(#f1f3f4, #48494a);
+    background: #f1f3f4;
     padding: 2px 6px;
     border-radius: 4px;
     font-weight: 500;
@@ -472,10 +469,10 @@
 
 /* Enhanced Citation Cards */
 .gemini-enhancer-citation-card {
-    background: light-dark(#ffffff, #2f2f2f);
-    border: 1px solid light-dark(#e8eaed, #5f6368);
+    background: #ffffff;
+    border: 1px solid #e8eaed;
     border-radius: 12px;
-    box-shadow: light-dark(0 4px 16px rgba(60,64,67,.15), 0 4px 16px rgba(0,0,0,.3));
+    box-shadow: 0 4px 16px rgba(60,64,67,.15);
     font-family: 'Google Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
     overflow: hidden;
     backdrop-filter: blur(12px);
@@ -495,11 +492,11 @@
     display: flex;
     align-items: center;
     padding: 12px 16px;
-    background: light-dark(#f8f9fa, #3c4043);
-    border-bottom: 1px solid light-dark(#e8eaed, #5f6368);
+    background: #f8f9fa;
+    border-bottom: 1px solid #e8eaed;
     font-size: 13px;
     font-weight: 500;
-    color: light-dark(#3c4043, #e8eaed);
+    color: #3c4043;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -513,7 +510,7 @@
 .citation-icon {
     font-size: 16px;
     margin-right: 8px;
-    color: light-dark(#1a73e8, #8ab4f8);
+    color: #1a73e8;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -530,7 +527,7 @@
     background: none;
     border: none;
     font-size: 18px;
-    color: light-dark(#5f6368, #9aa0a6);
+    color: #5f6368;
     cursor: pointer;
     padding: 4px;
     border-radius: 4px;
@@ -544,8 +541,8 @@
 }
 
 .citation-close:hover {
-    background: light-dark(#f1f3f4, #48494a);
-    color: light-dark(#3c4043, #e8eaed);
+    background: #f1f3f4;
+    color: #3c4043;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -563,10 +560,10 @@
     padding: 16px;
     font-size: 14px;
     line-height: 20px;
-    color: light-dark(#3c4043, #e8eaed);
+    color: #3c4043;
     max-height: 120px;
     overflow-y: auto;
-    border-bottom: 1px solid light-dark(#e8eaed, #5f6368);
+    border-bottom: 1px solid #e8eaed;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -580,7 +577,7 @@
     display: flex;
     gap: 8px;
     padding: 12px 16px;
-    background: light-dark(#fafbfc, #292a2d);
+    background: #fafbfc;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -590,13 +587,13 @@
 }
 
 .citation-action {
-    background: light-dark(#ffffff, #3c4043);
-    border: 1px solid light-dark(#dadce0, #5f6368);
+    background: #ffffff;
+    border: 1px solid #dadce0;
     border-radius: 20px;
     padding: 8px 16px;
     font-size: 13px;
     font-weight: 500;
-    color: light-dark(#1a73e8, #8ab4f8);
+    color: #1a73e8;
     cursor: pointer;
     transition: all 0.15s ease;
     white-space: nowrap;
@@ -604,10 +601,10 @@
 }
 
 .citation-action:hover {
-    background: light-dark(#f8f9fa, #48494a);
-    border-color: light-dark(#c0c4cc, #6e7175);
+    background: #f8f9fa;
+    border-color: #c0c4cc;
     transform: translateY(-1px);
-    box-shadow: light-dark(0 2px 4px rgba(60,64,67,.1), 0 2px 4px rgba(0,0,0,.2));
+    box-shadow: 0 2px 4px rgba(60,64,67,.1);
 }
 
 .citation-action:active {

@@ -8,21 +8,62 @@ document.addEventListener('DOMContentLoaded', async function() {
     const addCommandBtn = document.getElementById('addCommand');
     const triggerInput = document.getElementById('commandTrigger');
     const promptInput = document.getElementById('commandPrompt');
+    const exportBtn = document.getElementById('exportCommands');
+    const importBtn = document.getElementById('importCommands');
+    const importFile = document.getElementById('importFile');
+
+    // Track editing state
+    let editingKey = null;
     
     
     // Load and display existing commands
     await loadCommands();
     
     // Add new command
-    addCommandBtn.addEventListener('click', addCommand);
+    addCommandBtn.addEventListener('click', addOrUpdateCommand);
     
     // Enable adding command with Enter key
     triggerInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') addCommand();
+        if (e.key === 'Enter') addOrUpdateCommand();
     });
     
     promptInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && e.ctrlKey) addCommand();
+        if (e.key === 'Enter' && e.ctrlKey) addOrUpdateCommand();
+    });
+
+    // Export/import
+    exportBtn.addEventListener('click', async () => {
+        try {
+            const result = await browserAPI.storage.sync.get(['slashCommands']);
+            const commands = result.slashCommands || {};
+            const json = JSON.stringify(commands, null, 2);
+            await navigator.clipboard.writeText(json);
+            showNotification('Copied commands JSON to clipboard', 'success');
+        } catch (err) {
+            console.error('Export failed:', err);
+            showNotification('Export failed', 'error');
+        }
+    });
+    importBtn.addEventListener('click', () => importFile.click());
+    importFile.addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        try {
+            const text = await file.text();
+            const parsed = JSON.parse(text);
+            if (!parsed || typeof parsed !== 'object') throw new Error('Invalid JSON');
+            const result = await browserAPI.storage.sync.get(['slashCommands']);
+            const existing = result.slashCommands || {};
+            const merged = { ...existing, ...parsed };
+            await browserAPI.storage.sync.set({ slashCommands: merged });
+            showNotification('Imported commands', 'success');
+            await loadCommands();
+        } catch (err) {
+            console.error('Import failed:', err);
+            showNotification('Import failed', 'error');
+        } finally {
+            importFile.value = '';
+        }
     });
     
     
@@ -49,17 +90,25 @@ document.addEventListener('DOMContentLoaded', async function() {
             <div class="command-item" data-trigger="${trigger}">
                 <div class="command-trigger">/${trigger}</div>
                 <div class="command-description">${prompt}</div>
-                <button class="delete-btn" data-trigger="${trigger}">Delete</button>
+                <div style="display:flex; gap:8px;">
+                  <button class="delete-btn" data-trigger="${trigger}">Delete</button>
+                  <button class="delete-btn" data-edit="${trigger}">Edit</button>
+                </div>
             </div>
         `).join('');
         
         // Add delete event listeners
         commandsList.querySelectorAll('.delete-btn').forEach(btn => {
-            btn.addEventListener('click', () => deleteCommand(btn.dataset.trigger));
+            if (btn.dataset.trigger) {
+                btn.addEventListener('click', () => deleteCommand(btn.dataset.trigger));
+            }
+            if (btn.dataset.edit) {
+                btn.addEventListener('click', () => startEditCommand(btn.dataset.edit));
+            }
         });
     }
     
-    async function addCommand() {
+    async function addOrUpdateCommand() {
         const trigger = triggerInput.value.trim().toLowerCase();
         const prompt = promptInput.value.trim();
         
@@ -78,7 +127,13 @@ document.addEventListener('DOMContentLoaded', async function() {
             const result = await browserAPI.storage.sync.get(['slashCommands']);
             const commands = result.slashCommands || {};
             
-            const isUpdate = commands[trigger];
+            let isUpdate = false;
+            if (editingKey && editingKey !== trigger) {
+                // Renaming: remove old key
+                delete commands[editingKey];
+                isUpdate = true;
+            }
+            if (commands[trigger]) isUpdate = true;
             commands[trigger] = prompt;
             
             await browserAPI.storage.sync.set({ slashCommands: commands });
@@ -86,6 +141,8 @@ document.addEventListener('DOMContentLoaded', async function() {
             // Clear inputs
             triggerInput.value = '';
             promptInput.value = '';
+            editingKey = null;
+            addCommandBtn.textContent = 'Add Command';
             
             // Show success message
             showNotification(isUpdate ? `Updated /${trigger}` : `Added /${trigger}`, 'success');
@@ -97,6 +154,18 @@ document.addEventListener('DOMContentLoaded', async function() {
             console.error('Error saving command:', error);
             showNotification('Error saving command. Please try again.', 'error');
         }
+    }
+
+    function startEditCommand(trigger) {
+        // Prefill form and switch button label
+        triggerInput.value = trigger;
+        triggerInput.focus();
+        browserAPI.storage.sync.get(['slashCommands']).then(result => {
+            const commands = result.slashCommands || {};
+            promptInput.value = commands[trigger] || '';
+        });
+        editingKey = trigger;
+        addCommandBtn.textContent = 'Save Changes';
     }
     
     async function deleteCommand(trigger) {

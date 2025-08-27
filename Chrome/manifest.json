@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Gemini Enhancer",
-  "version": "1.6",
-  "description": "Ask follow-up questions to Gemini with custom slash commands. Now also autosaves your input on gemini.google.com!",
+  "version": "1.7",
+  "description": "Ask follow-ups with native-feeling UI, robust slash commands, and reliable autosave on gemini.google.com.",
   "permissions": [
     "activeTab",
     "storage",
