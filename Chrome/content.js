@@ -266,23 +266,16 @@ const eventCoordinator = new EventCoordinator();
 
 // Context menu functionality removed as requested by user
 
-// Function to determine if selected text is from AI response vs user input
-// Simplified and more reliable function to determine if selected text should trigger action buttons
+// Improved and more reliable AI response detection
 function isSelectionFromAIResponse(selection) {
     if (!selection || selection.rangeCount === 0) return false;
     
     const selectedText = selection.toString().trim();
-    console.log('🔍 Checking selection:', selectedText.substring(0, 100) + (selectedText.length > 100 ? '...' : ''));
+    console.log('🔍 Checking selection:', selectedText.substring(0, 50) + (selectedText.length > 50 ? '...' : ''));
     
-    // Must be at least 3 characters
-    if (selectedText.length < 3) {
-        console.log('❌ Selection too short (<3 chars)');
-        return false;
-    }
-    
-    // Don't show for very long selections (likely accidental)
-    if (selectedText.length > 1000) {
-        console.log('❌ Selection too long (>1000 chars)');
+    // Basic length validation
+    if (selectedText.length < 3 || selectedText.length > 2000) {
+        console.log(`❌ Selection length invalid: ${selectedText.length}`);
         return false;
     }
     
@@ -290,88 +283,94 @@ function isSelectionFromAIResponse(selection) {
     const container = range.commonAncestorContainer;
     let element = container.nodeType === Node.TEXT_NODE ? container.parentElement : container;
     
-    // First, check if we're in an input area (immediate rejection)
+    // Check if selection is within input/editable areas (absolute block)
     while (element && element !== document.body) {
         const tagName = element.tagName?.toLowerCase();
-        const isEditable = element.contentEditable === 'true';
+        const isEditable = element.contentEditable === 'true' || element.contentEditable === '';
         const role = element.getAttribute('role');
+        const ariaLabel = element.getAttribute('aria-label');
         
-        // Block if clearly in input/editable area
         if (
             tagName === 'textarea' ||
             tagName === 'input' ||
             isEditable ||
             role === 'textbox' ||
-            element.closest('[contenteditable="true"]') ||
-            element.closest('textarea, input, [role="textbox"]')
+            role === 'searchbox' ||
+            ariaLabel === 'Message Gemini' ||
+            element.closest('[contenteditable="true"], [contenteditable=""], textarea, input, [role="textbox"], [aria-label="Message Gemini"]')
         ) {
-            console.log('❌ Selection in input/editable area:', tagName);
+            console.log('❌ Selection in input area:', { tagName, isEditable, role, ariaLabel });
             return false;
         }
         
         element = element.parentElement;
     }
     
-    // Check distance from input areas
-    const selectionRect = range.getBoundingClientRect();
-    const inputElements = document.querySelectorAll('textarea, input, [contenteditable="true"], [role="textbox"]');
-    
-    for (const input of inputElements) {
-        // Skip if input is not visible
-        if (input.offsetParent === null) continue;
-        
-        const inputRect = input.getBoundingClientRect();
-        const distance = Math.sqrt(
-            Math.pow(selectionRect.left - inputRect.left, 2) + 
-            Math.pow(selectionRect.top - inputRect.top, 2)
-        );
-        
-        // Be more restrictive for very close selections
-        const proximityThreshold = 80;
-        if (distance < proximityThreshold) {
-            console.log(`❌ Selection too close to input (${distance.toFixed(0)}px < ${proximityThreshold}px)`);
+    // Simplified proximity check - only block if extremely close to visible inputs
+    try {
+        const selectionRect = range.getBoundingClientRect();
+        if (selectionRect.width === 0 || selectionRect.height === 0) {
+            console.log('❌ Selection has no visible dimensions');
             return false;
         }
-    }
-    
-    // More permissive approach: Allow most text selections that aren't in input areas
-    // This makes the feature much more reliable and responsive to user selections
-    
-    // Allow if text contains common content patterns
-    const hasGoodPatterns = 
-        // Technical/code patterns
-        /[a-zA-Z_]\w*\(|\w+\.\w+|function|class|const|let|var|import|export/i.test(selectedText) ||
-        // Structured content patterns
-        /^\d+\.|^\*|^-|\*\*|\`|```|^#{1,6}\s|^\s*[\-\*\+]/m.test(selectedText) ||
-        // Common explanatory phrases
-        /\b(based on|according to|for example|specifically|however|therefore|because)\b/i.test(selectedText) ||
-        // Has some punctuation indicating complete thoughts
-        /[.!?;:]/.test(selectedText) ||
-        // Contains multiple words (not just random characters)
-        /\b\w+\s+\w+/.test(selectedText);
-    
-    if (hasGoodPatterns) {
-        console.log('✅ Selection contains good content patterns');
-        return true;
-    }
-    
-    // Allow shorter technical terms or single words if they look meaningful
-    if (selectedText.length <= 50) {
-        // Technical terms, camelCase, constants, etc.
-        const isTechnical = /^[A-Z_][A-Z_]*$|^[a-z]+[A-Z][a-zA-Z]*$|^[a-zA-Z]+[0-9]+|^\w+\(\)$/.test(selectedText);
-        if (isTechnical) {
-            console.log('✅ Selection looks like technical term');
-            return true;
+        
+        const visibleInputs = document.querySelectorAll('textarea:not([style*="display: none"]), input:not([style*="display: none"]), [contenteditable="true"]:not([style*="display: none"]), [role="textbox"]:not([style*="display: none"])');
+        
+        for (const input of visibleInputs) {
+            if (input.offsetParent === null || !input.getBoundingClientRect) continue;
+            
+            const inputRect = input.getBoundingClientRect();
+            if (inputRect.width === 0 || inputRect.height === 0) continue;
+            
+            // Check if selection overlaps with input area
+            const overlap = !(
+                selectionRect.right < inputRect.left ||
+                selectionRect.left > inputRect.right ||
+                selectionRect.bottom < inputRect.top ||
+                selectionRect.top > inputRect.bottom
+            );
+            
+            if (overlap) {
+                console.log('❌ Selection overlaps with input area');
+                return false;
+            }
+            
+            // Only reject if very close (within 50px) to focused or large input areas
+            const distance = Math.min(
+                Math.abs(selectionRect.left - inputRect.left),
+                Math.abs(selectionRect.right - inputRect.right),
+                Math.abs(selectionRect.top - inputRect.top),
+                Math.abs(selectionRect.bottom - inputRect.bottom)
+            );
+            
+            if (distance < 50 && (input === document.activeElement || inputRect.height > 50)) {
+                console.log(`❌ Selection too close to active/large input (${distance.toFixed(0)}px)`);
+                return false;
+            }
         }
+    } catch (error) {
+        console.warn('Error in proximity check:', error);
+        // Continue with other checks if proximity check fails
     }
     
-    // Final catch-all: Allow selections that are reasonable length and contain letters
-    if (selectedText.length >= 5 && /[a-zA-Z]{3,}/.test(selectedText)) {
-        console.log('✅ Reasonable text selection allowed');
+    // Much more permissive content validation - allow almost any reasonable text
+    const isValidText = (
+        // Contains letters and basic punctuation
+        /[a-zA-Z]/i.test(selectedText) &&
+        // Not just random characters or numbers
+        !/^[\d\s\W]*$/.test(selectedText) &&
+        // Not just whitespace or single characters repeated
+        !/^(.)\1*$/.test(selectedText.trim()) &&
+        // Contains at least one word character
+        /\w/.test(selectedText)
+    );
+    
+    if (isValidText) {
+        console.log('✅ Selection contains valid text content');
         return true;
     }
     
-    console.log('❌ Selection did not meet any criteria');
+    console.log('❌ Selection does not contain valid text');
     return false;
 }
 
@@ -475,8 +474,10 @@ function initializeEventListeners() {
     console.log('Event listeners initialized with cleanup');
 }
 
-// Initialize event listeners
-initializeEventListeners();
+// Initialize event listeners only if not on excluded paths
+if (!isExcludedPath()) {
+    initializeEventListeners();
+}
 
 // --- AUTOSAVE FEATURE ---
 const AUTOSAVE_STORAGE_KEY = 'autosavedContent_gemini';
@@ -634,8 +635,22 @@ function onUrlChange() {
     if (lastKnownUrl !== location.href) {
         lastKnownUrl = location.href;
         enhancerState.set('autoSave.lastRestoredUrl', null);
+        
+        // Check if we're on an excluded path and disable features accordingly
+        if (isExcludedPath()) {
+            console.log('Gemini Enhancer disabled on excluded path:', window.location.pathname);
+            // Clean up any active features
+            const followUpButton = enhancerState.get('followUp.button');
+            if (followUpButton) {
+                followUpButton.remove();
+                enhancerState.set('followUp.button', null);
+            }
+            hideCommandAutocomplete();
+            return;
+        }
+        
         observeInputBox();
-    } else {
+    } else if (!isExcludedPath()) {
         // Even if URL didn't change, try to restore if input is present and not restored
         const inputField = findGeminiInputBox();
         if (inputField) restoreInputContent(inputField);
@@ -668,16 +683,26 @@ function hookHistoryEvents() {
     window.addEventListener('hashchange', onUrlChange);
 }
 
-if (document.readyState === 'complete') {
-    observeInputBox();
-    hookHistoryEvents();
-    startUrlPolling();
-} else {
-    window.addEventListener('load', () => {
+function isExcludedPath() {
+    const pathname = window.location.pathname;
+    const excludedPaths = ['/u/1/apps', '/u/1/saved-info'];
+    return excludedPaths.some(path => pathname.startsWith(path));
+}
+
+if (!isExcludedPath()) {
+    if (document.readyState === 'complete') {
         observeInputBox();
         hookHistoryEvents();
         startUrlPolling();
-    });
+    } else {
+        window.addEventListener('load', () => {
+            observeInputBox();
+            hookHistoryEvents();
+            startUrlPolling();
+        });
+    }
+} else {
+    console.log('Gemini Enhancer disabled on excluded path:', window.location.pathname);
 }
 // --- END AUTOSAVE FEATURE ---
 
@@ -720,96 +745,68 @@ function handleMouseDown(event) {
 // Context menu handler removed as requested by user
 
 function handleSelectionChange() {
-    // Clear any existing stability timeout
-    const stabilityTimeout = enhancerState.get('followUp.stabilityTimeout');
-    if (stabilityTimeout) {
-        clearTimeout(stabilityTimeout);
-        enhancerState.set('followUp.stabilityTimeout', null);
-    }
-    
-    const selection = window.getSelection();
-    const selectedText = selection.toString().trim();
-    const lastSelectedText = enhancerState.get('followUp.selectedText');
-    const followUpButton = enhancerState.get('followUp.button');
-    
-    // If we have a meaningful selection from AI response, update selectedText and keep button
-    if (selectedText && selectedText.length >= 3 && isSelectionFromAIResponse(selection)) {
-        // Check if selection has been extended significantly
-        const selectionExtended = Math.abs(selectedText.length - lastSelectedText.length) > 5;
-        enhancerState.set('followUp.selectedText', selectedText);
-        
-        // If we have a button, update its position smoothly
-        if (followUpButton && followUpButton.classList.contains('show')) {
-            updateButtonPosition();
-            
-            // Provide subtle visual feedback when selection is extended
-            if (selectionExtended) {
-                console.log('Selection extended, button will use current selection on click');
-                // Brief highlight to indicate the button is aware of the extended selection
-                followUpButton.style.boxShadow = 'light-dark(0 2px 8px rgba(26, 115, 232, 0.4), 0 2px 8px rgba(138, 180, 248, 0.4))';
-                setTimeout(() => {
-                    if (followUpButton) {
-                        followUpButton.style.boxShadow = '';
-                    }
-                }, 200);
-            }
-        }
-        return;
-    }
-    
-    // If no meaningful selection but we recently had one, don't remove button immediately
-    // This prevents the button from disappearing during selection adjustments
-    const isHoveringButton = enhancerState.get('followUp.isHoveringButton');
-    if (!selectedText && followUpButton && lastSelectedText && !isHoveringButton) {
-        // Give the user 5 seconds to click the button before removing it
-        const newTimeout = setTimeout(() => {
-            const currentButton = enhancerState.get('followUp.button');
-            const currentHovering = enhancerState.get('followUp.isHoveringButton');
-            if (currentButton && !window.getSelection().toString().trim() && !currentHovering) {
-                console.log('Removing follow-up button after stability timeout');
-                removeFollowUpButton();
-                enhancerState.set('followUp.selectedText', '');
-            }
-        }, 5000); // Increased to 5 seconds
-        
-        enhancerState.set('followUp.stabilityTimeout', newTimeout);
-        enhancerState.addCleanup(() => clearTimeout(newTimeout));
-    }
+    // Use the main text selection handler instead of duplicating logic
+    handleTextSelection({ type: 'selectionchange', target: document.activeElement || document.body });
 }
 
 function updateButtonPosition() {
     const followUpButton = enhancerState.get('followUp.button');
-    if (!followUpButton || !followUpButton.classList.contains('show')) return;
+    if (!followUpButton || !followUpButton.parentNode) return;
     
     const selection = window.getSelection();
-    if (selection.rangeCount > 0) {
+    if (selection.rangeCount === 0) return;
+    
+    try {
         const range = selection.getRangeAt(0);
         const rect = range.getBoundingClientRect();
         
-        // Only update position if selection is visible
-        if (rect.width > 0 && rect.height > 0) {
-            // Calculate new position
-            const buttonTop = window.scrollY + rect.top - 44;
-            const buttonLeft = window.scrollX + rect.left;
-            
-            // Ensure button doesn't go off screen
-            const viewportWidth = window.innerWidth;
-            const buttonWidth = 120;
-            const finalLeft = Math.min(buttonLeft, viewportWidth - buttonWidth - 16);
-            
-            // Only update position if it's significantly different to prevent jitter
-            const currentLeft = parseInt(followUpButton.style.left) || 0;
-            const currentTop = parseInt(followUpButton.style.top) || 0;
-            const newLeft = Math.max(8, finalLeft);
-            const newTop = Math.max(8, buttonTop);
-            
-            if (Math.abs(currentLeft - newLeft) > 10 || Math.abs(currentTop - newTop) > 10) {
-                // Smooth position update with dedicated position transition
-                followUpButton.style.transition = 'left 0.2s cubic-bezier(0.4, 0.0, 0.2, 1), top 0.2s cubic-bezier(0.4, 0.0, 0.2, 1)';
-                followUpButton.style.left = `${newLeft}px`;
-                followUpButton.style.top = `${newTop}px`;
+        // Skip if selection is not visible
+        if (rect.width === 0 || rect.height === 0) return;
+        
+        // Get container dimensions
+        const containerWidth = 320;
+        const containerHeight = 48;
+        const margin = 8;
+        
+        // Calculate position above selection
+        let buttonTop = rect.top - containerHeight - margin;
+        let buttonLeft = rect.left + (rect.width / 2) - (containerWidth / 2);
+        
+        // Keep within viewport bounds
+        const viewport = {
+            width: window.innerWidth,
+            height: window.innerHeight,
+            scrollX: window.scrollX,
+            scrollY: window.scrollY
+        };
+        
+        // Horizontal bounds
+        buttonLeft = Math.max(8, Math.min(buttonLeft, viewport.width - containerWidth - 8));
+        
+        // Vertical bounds - if no room above, place below
+        if (buttonTop < 8) {
+            buttonTop = rect.bottom + margin;
+            if (buttonTop + containerHeight > viewport.height - 8) {
+                // If no room above or below, place at top of viewport
+                buttonTop = 8;
             }
         }
+        
+        // Convert to absolute positioning
+        const finalLeft = buttonLeft + viewport.scrollX;
+        const finalTop = buttonTop + viewport.scrollY;
+        
+        // Update position if changed significantly
+        const currentLeft = parseFloat(followUpButton.style.left) || 0;
+        const currentTop = parseFloat(followUpButton.style.top) || 0;
+        
+        if (Math.abs(currentLeft - finalLeft) > 5 || Math.abs(currentTop - finalTop) > 5) {
+            followUpButton.style.left = `${Math.max(0, finalLeft)}px`;
+            followUpButton.style.top = `${Math.max(0, finalTop)}px`;
+            console.log(`📝 Button positioned at (${finalLeft.toFixed(0)}, ${finalTop.toFixed(0)})`);
+        }
+    } catch (error) {
+        console.warn('Error updating button position:', error);
     }
 }
 
@@ -821,82 +818,95 @@ function handleTextSelection(event) {
         clearTimeout(selectionTimeout);
     }
     
-    // Debounce selection handling for better performance and reliability
+    // Use shorter debounce for better responsiveness
     selectionTimeout = setTimeout(() => {
         try {
             const selection = window.getSelection();
             const selectedText = selection.toString().trim();
-            console.log('📝 Processing selection:', selectedText.length > 0 ? `"${selectedText.substring(0, 50)}${selectedText.length > 50 ? '...' : ''}"` : 'No selection');
+            console.log('📝 Processing selection:', selectedText.length > 0 ? `"${selectedText.substring(0, 30)}${selectedText.length > 30 ? '...' : ''}"` : 'No selection');
 
-            // If clicking on the follow-up button container, don't interfere
             const followUpContainer = enhancerState.get('followUp.button');
-            if (followUpContainer && (followUpContainer.contains(event.target) || followUpContainer === event.target)) {
+            
+            // If clicking on the follow-up button, don't interfere
+            if (followUpContainer && event.target && (followUpContainer.contains(event.target) || followUpContainer === event.target)) {
                 console.log('📝 Click was on follow-up button, ignoring');
                 return;
             }
 
-            // If we have meaningful selected text, check if it should trigger buttons
+            // Handle meaningful text selection
             if (selectedText && selectedText.length >= 3) {
-                // Only proceed if selection should trigger action buttons
+                // Check if this is a valid selection for follow-up
                 if (!isSelectionFromAIResponse(selection)) {
                     console.log('📝 Selection blocked by AI response filter');
-                    // Remove button if it exists and selection is not valid
                     if (followUpContainer) {
                         removeFollowUpButton();
                     }
                     return;
                 }
                 
-                // Check if button already exists for similar text
-                const existingButton = enhancerState.get('followUp.button');
-                if (existingButton && Math.abs(selectedText.length - lastSelectedText.length) < 50) {
-                    // Update position for existing button if text is similar
+                // Update or create button
+                if (followUpContainer && followUpContainer.parentNode) {
+                    // Update existing button position and content
                     lastSelectedText = selectedText;
+                    enhancerState.set('followUp.selectedText', selectedText);
                     updateButtonPosition();
-                    console.log('📝 Updated existing button position');
-                    return;
-                }
-                
-                // Remove existing button before creating new one
-                if (existingButton) {
-                    console.log('📝 Removing existing button to create new one');
+                    
+                    // Clear any removal timeout
                     const stabilityTimeout = enhancerState.get('followUp.stabilityTimeout');
                     if (stabilityTimeout) {
                         clearTimeout(stabilityTimeout);
                         enhancerState.set('followUp.stabilityTimeout', null);
                     }
-                    removeFollowUpButton();
+                    
+                    console.log('📝 Updated existing button for new selection');
+                    return;
                 }
-
-                // Validate selection has proper range and is visible
+                
+                // Create new button - ensure we have a valid range first
                 if (selection.rangeCount > 0) {
                     const range = selection.getRangeAt(0);
                     const rect = range.getBoundingClientRect();
                     
-                    // Only show button if selection is visible on screen and has dimensions
-                    if (rect.width > 0 && rect.height > 0 && 
-                        rect.top >= 0 && rect.left >= 0 && 
-                        rect.top < window.innerHeight && rect.left < window.innerWidth) {
-                        
+                    // More lenient visibility check
+                    if (rect.width > 0 && rect.height > 0 && rect.top > -50 && rect.left > -50) {
                         lastSelectedText = selectedText;
-                        console.log('📝 Creating action buttons for valid selection');
+                        enhancerState.set('followUp.selectedText', selectedText);
+                        console.log('📝 Creating new follow-up button');
                         createFollowUpButton(selectedText);
                     } else {
-                        console.log('📝 Selection not visible or has no dimensions');
+                        console.log('📝 Selection not sufficiently visible:', rect);
                     }
                 }
-            } else if (selectedText.length === 0) {
-                // No selection - remove button if it exists
-                const existingButton = enhancerState.get('followUp.button');
-                if (existingButton) {
-                    console.log('📝 No selection, scheduling button removal');
-                    // Don't remove immediately - let handleSelectionChange handle it with stability timeout
+            } else {
+                // No selection - handle button removal with stability timeout
+                if (followUpContainer && followUpContainer.parentNode) {
+                    const lastSelectedText = enhancerState.get('followUp.selectedText');
+                    const isHoveringButton = enhancerState.get('followUp.isHoveringButton');
+                    
+                    if (lastSelectedText && !isHoveringButton) {
+                        console.log('📝 No selection, setting removal timeout');
+                        const stabilityTimeout = enhancerState.get('followUp.stabilityTimeout');
+                        if (stabilityTimeout) {
+                            clearTimeout(stabilityTimeout);
+                        }
+                        
+                        const newTimeout = setTimeout(() => {
+                            const currentButton = enhancerState.get('followUp.button');
+                            const currentHovering = enhancerState.get('followUp.isHoveringButton');
+                            if (currentButton && !window.getSelection().toString().trim() && !currentHovering) {
+                                console.log('📝 Removing follow-up button after timeout');
+                                removeFollowUpButton();
+                            }
+                        }, 3000); // 3 second timeout
+                        
+                        enhancerState.set('followUp.stabilityTimeout', newTimeout);
+                    }
                 }
             }
         } catch (error) {
             console.error('📝 Error in handleTextSelection:', error);
         }
-    }, 100); // Reduced debounce for better responsiveness
+    }, 50); // Shorter debounce for better responsiveness
 }
 
 // Handle keyboard-based text selection (Shift+arrows, Ctrl+A, etc.)
@@ -904,22 +914,22 @@ function handleKeyboardSelection(event) {
     console.log('⌨️ handleKeyboardSelection called with key:', event.key);
     
     // Only handle keys that might change selection
-    const selectionKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'];
+    const selectionKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown', 'a'];
     const modifierKeys = event.shiftKey || event.ctrlKey || event.metaKey;
     
     if (selectionKeys.includes(event.key) && modifierKeys) {
-        console.log('⌨️ Keyboard selection detected, checking text selection');
+        console.log('⌨️ Keyboard selection event detected');
         
-        // Small delay to let selection update
+        // Delay to let selection update
         setTimeout(() => {
             const selection = window.getSelection();
             const selectedText = selection.toString().trim();
             
             if (selectedText && selectedText.length >= 3) {
-                console.log('⌨️ Keyboard selection has text, triggering handleTextSelection');
+                console.log('⌨️ Keyboard selection has text, processing');
                 handleTextSelection({ type: 'keyboardselection', target: document.activeElement || document.body });
             }
-        }, 10);
+        }, 20);
     }
 }
 
@@ -1028,31 +1038,52 @@ function createFollowUpButton(text) {
         followUpButton.appendChild(button);
     });
     
-    // Position the button container above the selection
-    let preferredPosition = { top: 100, left: 100 }; // Default position
+    // Position the button container using the reliable positioning logic
+    followUpButton.style.position = 'absolute';
+    followUpButton.style.zIndex = '10000';
     
+    // Initial positioning to prevent flash
+    followUpButton.style.left = '0px';
+    followUpButton.style.top = '0px';
+    
+    // Add to DOM first so we can measure it
+    document.body.appendChild(followUpButton);
+    
+    // Now position it properly
     const selection = window.getSelection();
     if (selection.rangeCount > 0) {
         const range = selection.getRangeAt(0);
         const rect = range.getBoundingClientRect();
         
-        // Calculate optimal position
-        preferredPosition = {
-            top: window.scrollY + rect.top - 54, // 54px above to accommodate three buttons
-            left: window.scrollX + rect.left
-        };
-        
-        // Use event coordinator to resolve UI conflicts
-        const adjustedPosition = eventCoordinator.requestUISpace('follow-up', followUpButton, preferredPosition);
-        
-        // Ensure container doesn't go off screen
-        const viewportWidth = window.innerWidth;
-        const containerWidth = 320; // Approximate container width for three buttons
-        const finalLeft = Math.min(adjustedPosition.left, viewportWidth - containerWidth - 16);
-        
-        followUpButton.style.position = 'absolute';
-        followUpButton.style.left = `${Math.max(8, finalLeft)}px`;
-        followUpButton.style.top = `${Math.max(8, adjustedPosition.top)}px`;
+        if (rect.width > 0 && rect.height > 0) {
+            const containerWidth = 320;
+            const containerHeight = 48;
+            const margin = 8;
+            
+            // Calculate position above selection
+            let buttonTop = rect.top - containerHeight - margin;
+            let buttonLeft = rect.left + (rect.width / 2) - (containerWidth / 2);
+            
+            // Keep within viewport bounds
+            buttonLeft = Math.max(8, Math.min(buttonLeft, window.innerWidth - containerWidth - 8));
+            
+            // If no room above, place below
+            if (buttonTop < 8) {
+                buttonTop = rect.bottom + margin;
+                if (buttonTop + containerHeight > window.innerHeight - 8) {
+                    buttonTop = 8; // Fallback to top
+                }
+            }
+            
+            // Convert to absolute positioning
+            const finalLeft = buttonLeft + window.scrollX;
+            const finalTop = buttonTop + window.scrollY;
+            
+            followUpButton.style.left = `${Math.max(0, finalLeft)}px`;
+            followUpButton.style.top = `${Math.max(0, finalTop)}px`;
+            
+            console.log(`📝 Initial button position: (${finalLeft.toFixed(0)}, ${finalTop.toFixed(0)})`);
+        }
     }
 
     // Add hover event listeners to track hover state
@@ -1070,10 +1101,8 @@ function createFollowUpButton(text) {
         enhancerState.set('followUp.isHoveringButton', false);
     });
 
-    document.body.appendChild(followUpButton);
-    
     // Activate feature in coordinator
-    eventCoordinator.activateFeature('follow-up', { text, position: preferredPosition });
+    eventCoordinator.activateFeature('follow-up', { text, position: { top: 0, left: 0 } });
     
     // Force a reflow to ensure initial hidden state is applied
     followUpButton.offsetHeight;
@@ -1362,12 +1391,14 @@ function insertTextIntoInputBox(text) {
     }
 }
 
-// Monitor input changes for slash commands
-document.addEventListener('input', handleInputChange, true);
-document.addEventListener('keydown', handleKeyDown, { capture: true, passive: false });
-document.addEventListener('keyup', handleKeyUp, true);
-document.addEventListener('click', handleDocumentClick, true);
-document.addEventListener('focusout', handleFocusOut, true);
+// Monitor input changes for slash commands only if not on excluded paths
+if (!isExcludedPath()) {
+    document.addEventListener('input', handleInputChange, true);
+    document.addEventListener('keydown', handleKeyDown, { capture: true, passive: false });
+    document.addEventListener('keyup', handleKeyUp, true);
+    document.addEventListener('click', handleDocumentClick, true);
+    document.addEventListener('focusout', handleFocusOut, true);
+}
 
 function handleInputChange(event) {
     const target = event.target;
