@@ -950,28 +950,17 @@ function handleTextSelection(event) {
                     }
                 }
             } else {
-                // No selection - handle button removal with stability timeout
+                // No selection - remove follow-up button immediately (unless hovering)
                 if (followUpContainer && followUpContainer.parentNode) {
-                    const lastSelectedText = enhancerState.get('followUp.selectedText');
                     const isHoveringButton = enhancerState.get('followUp.isHoveringButton');
-                    
-                    if (lastSelectedText && !isHoveringButton) {
-                        console.log('📝 No selection, setting removal timeout');
+                    if (!isHoveringButton) {
+                        console.log('📝 No selection, removing follow-up button immediately');
                         const stabilityTimeout = enhancerState.get('followUp.stabilityTimeout');
                         if (stabilityTimeout) {
                             clearTimeout(stabilityTimeout);
+                            enhancerState.set('followUp.stabilityTimeout', null);
                         }
-                        
-                        const newTimeout = setTimeout(() => {
-                            const currentButton = enhancerState.get('followUp.button');
-                            const currentHovering = enhancerState.get('followUp.isHoveringButton');
-                            if (currentButton && !window.getSelection().toString().trim() && !currentHovering) {
-                                console.log('📝 Removing follow-up button after timeout');
-                                removeFollowUpButton();
-                            }
-                        }, 3000); // 3 second timeout
-                        
-                        enhancerState.set('followUp.stabilityTimeout', newTimeout);
+                        removeFollowUpButton();
                     }
                 }
             }
