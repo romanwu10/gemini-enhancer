@@ -1,156 +1,55 @@
 # Privacy Policy for Gemini Enhancer
 
-**Last Updated:** May 28, 2025
+Last updated: August 29, 2025
 
 ## Overview
 
-Gemini Enhancer is a Chrome extension that enhances your experience with AI chat interfaces by providing follow-up question functionality and custom slash commands. This privacy policy explains how we handle your data.
+Gemini Enhancer is a Chrome extension that streamlines composing prompts on gemini.google.com. This policy explains what data the extension handles and how it is protected.
 
-## Data Collection and Usage
+## What data we handle
 
-### Information We Collect
+- Slash commands you create: stored using Chrome’s `storage.sync` so they can optionally sync across your devices via your Google account. This data is managed by Chrome Sync, not sent to the developer.
+- Draft text autosave: stored per‑URL in Chrome’s `storage.local` on your device so your message is restored after reloads or browser restarts.
 
-**Local Storage Data:**
-- Custom slash commands that you create
-- Extension settings and preferences
+We do not collect or receive: names, emails, chat transcripts, browsing history, IP addresses, analytics, or any other personal identifiers.
 
-**No Personal Data Collection:**
-- We do NOT collect, store, or transmit any personal information
-- We do NOT collect your chat conversations or messages
-- We do NOT collect browsing history or website data
-- We do NOT collect any personally identifiable information (PII)
+## How data is used
 
-### How We Use Your Data
+- All processing happens locally in your browser. Selected text and input content are used only to insert prompts into the chat box.
+- Data is never transmitted to any developer‑controlled server. For `storage.sync`, Chrome may store a copy in your Google account for sync; it is encrypted in transit and can be end‑to‑end encrypted if you set a sync passphrase.
 
-**Local Storage Only:**
-- Your custom slash commands are stored locally in your browser using Chrome's storage API
-- Settings and preferences are stored locally on your device
-- All data remains on your device and is never transmitted to external servers
+## Permissions and scope
 
-**Text Selection Processing:**
-- When you select text and use the Follow-up feature, the text is processed locally in your browser
-- Selected text is formatted and inserted into the active chat input box
-- No text data is sent to our servers or any third-party services
+- `host_permissions: *://gemini.google.com/*` — required to run the content script on Gemini pages only.
+- `storage` — needed to save your slash commands (sync) and drafts (local).
+- `activeTab` and `tabs` — used only to target the current Gemini tab and refresh UI state after direct user interaction. No reading of other sites.
 
-### Data Storage and Security
+The extension does not inject or load remote code, use dynamic imports from the network, or request additional origins.
 
-**Local Storage:**
-- All extension data is stored locally using Chrome's secure storage mechanisms
-- Data is encrypted and protected by Chrome's built-in security features
-- Only the Gemini Enhancer extension can access its stored data
+## Data retention and control
 
-**No Remote Storage:**
-- We do not maintain any servers or databases
-- No user data is transmitted over the internet
-- No data is shared with third parties
+- Slash commands persist until you edit or delete them in the popup or clear Chrome data.
+- Drafts are overwritten as you type and may be automatically removed when the input becomes empty. You can also clear them by clearing site data or uninstalling the extension.
 
-### Permissions Usage
+## Sharing
 
-The extension requests the following permissions:
+- No sale or sharing of data with third parties.
+- No advertising, analytics, or tracking libraries.
 
-**activeTab:**
-- Used to interact with the currently active AI chat website (Gemini)
-- Allows the extension to detect text selections and insert follow-up text
-- Does not access content from other tabs or websites
+## Children’s privacy
 
-**scripting:**
-- Used to inject the content script that provides follow-up functionality
-- Enables text selection detection and chat input interaction
-- Only operates on supported AI chat websites
+The extension is for general audiences and does not knowingly collect information from children under 13.
 
-**storage:**
-- Used to save your custom slash commands locally
-- Stores extension preferences on your device
-- Data never leaves your local machine
+## Changes
 
-### Website Interaction
+If this policy changes, the "Last updated" date will be revised. Material changes will be reflected in the Web Store listing and repository.
 
-**Supported Websites:**
-- The extension only operates on gemini.google.com
-- It detects text selections and chat input boxes on these sites
-- No data from these interactions is collected or stored remotely
+## Contact
 
-**Content Script Functionality:**
-- Monitors text selections to show Follow-up buttons
-- Inserts formatted citations into chat input boxes
-- Provides slash command autocomplete functionality
-- All processing happens locally in your browser
-
-### Data Sharing and Third Parties
-
-**No Data Sharing:**
-- We do not share any data with third parties
-- We do not sell, rent, or lease user data
-- We do not use analytics or tracking services
-- We do not integrate with external APIs or services
-
-### User Control and Data Management
-
-**Your Control:**
-- You can view and edit your custom slash commands through the extension popup
-- You can delete individual slash commands at any time
-- You can uninstall the extension to remove all stored data
-- All data management happens locally on your device
-
-**Data Deletion:**
-- Uninstalling the extension removes all stored data
-- You can manually clear extension data through Chrome's settings
-- No remote data deletion is required as no remote data is stored
-
-### Children's Privacy
-
-This extension does not knowingly collect any information from children under 13 years of age. The extension is designed for general use and does not target children specifically.
-
-### Updates to Privacy Policy
-
-We may update this privacy policy from time to time. When we do:
-- We will update the "Last Updated" date at the top of this policy
-- Significant changes will be communicated through the extension's update notes
-- Continued use of the extension after updates constitutes acceptance of the revised policy
-
-### Chrome Web Store Compliance
-
-This extension complies with Chrome Web Store policies:
-- **Single Purpose:** Enhances AI chat interfaces with follow-up functionality
-- **Limited Data Collection:** Only collects necessary local preferences
-- **Transparent Privacy Practices:** Clearly discloses all data handling practices
-- **Secure Data Handling:** Uses Chrome's secure storage mechanisms
-
-### Technical Implementation
-
-**No Network Requests:**
-- The extension does not make any HTTP requests to external servers
-- All functionality operates entirely within your browser
-- No telemetry or usage analytics are collected
-
-**Local Processing:**
-- Text processing happens locally using JavaScript
-- No server-side processing or cloud services are used
-- Extension works completely offline after installation
-
-### Contact Information
-
-If you have questions about this privacy policy or the extension's data handling practices, you can:
-- Review the source code (if open source)
-- Contact through the Chrome Web Store developer contact information
-- Submit feedback through the extension's support channels
-
-### Legal Compliance
-
-This extension and privacy policy comply with:
-- Chrome Web Store Developer Program Policies
-- General Data Protection Regulation (GDPR) principles
-- California Consumer Privacy Act (CCPA) requirements
-- Other applicable privacy regulations
+Questions? Use the developer contact information on the Chrome Web Store listing or the repository issue tracker.
 
 ## Summary
 
-**Key Points:**
-- ✅ No personal data collection
-- ✅ All data stored locally on your device
-- ✅ No data transmission to external servers
-- ✅ No third-party data sharing
-- ✅ Full user control over stored data
-- ✅ Transparent and minimal data handling
-
-Your privacy is important to us. This extension is designed to enhance your AI chat experience while keeping all your data secure and private on your own device.
+- No personal data collection or transmission to the developer
+- Storage limited to user commands (sync) and drafts (local)
+- Runs only on gemini.google.com with minimal permissions
