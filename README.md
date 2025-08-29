@@ -6,6 +6,8 @@ A Chrome extension that enhances your experience with AI chat interfaces like Ge
 
 v1.7: Polished native-feel UI, improved reliability (no duplicate injections on SPA navigations), accessible slash command dropdown (ARIA roles, keyboard-friendly), non-blocking toasts instead of alerts, autosave on tab hide, and robust dark/light styling (removed unsupported light-dark()).
 
+👉 Quick download: [Download ZIP](https://github.com/romanwu10/gemini-enhancer/archive/refs/heads/main.zip)
+
 ## Features
 
 ### 🎨 Modern UI & Theme Support
@@ -68,7 +70,7 @@ Click the extension icon to open the Slash Commands manager where you can:
 
 ## Installation
 
-1. Download or clone this repository
+1. Download or clone this repository (or use the link above: [Download ZIP](https://github.com/romanwu10/gemini-enhancer/archive/refs/heads/main.zip))
 2. Open Chrome and go to `chrome://extensions/`
 3. Enable "Developer mode" in the top right
 4. Click "Load unpacked" and select the extension folder
