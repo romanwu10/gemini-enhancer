@@ -637,14 +637,21 @@ async function restoreInputContent(inputField) {
         const result = await browserAPI.storage.local.get(AUTOSAVE_STORAGE_KEY);
         const savedData = result[AUTOSAVE_STORAGE_KEY];
         if (savedData && savedData.url === currentUrl && savedData.text) {
-            if (inputField.tagName === 'TEXTAREA' || inputField.tagName === 'INPUT') {
-                inputField.value = savedData.text;
-            } else {
-                inputField.innerText = savedData.text;
+            // Only restore if the field is effectively empty to avoid overwriting
+            const currentText = (inputField.tagName === 'TEXTAREA' || inputField.tagName === 'INPUT')
+                ? (inputField.value || '')
+                : (inputField.innerText || '');
+
+            if (currentText.trim().length === 0) {
+                if (inputField.tagName === 'TEXTAREA' || inputField.tagName === 'INPUT') {
+                    inputField.value = savedData.text;
+                } else {
+                    inputField.innerText = savedData.text;
+                }
+                inputField.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+                inputField.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+                enhancerState.set('autoSave.lastRestoredUrl', currentUrl);
             }
-            inputField.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-            inputField.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
-            enhancerState.set('autoSave.lastRestoredUrl', currentUrl);
         }
     } catch (error) {
         if (error.message.includes('Extension context invalidated')) {
