@@ -520,14 +520,36 @@ function initializeEventListeners() {
         window.removeEventListener('scroll', onViewportChange, { passive: true });
     });
 
-    // Save autosave buffer when tab becomes hidden
+    // Save autosave buffer when tab becomes hidden / page is leaving
     const onVisibility = () => {
         if (document.visibilityState === 'hidden') {
             saveInputContent();
         }
     };
+    const onPageHide = () => {
+        // Flush any pending debounce and persist immediately
+        const pending = enhancerState.get('autoSave.timeout');
+        if (pending) {
+            clearTimeout(pending);
+            enhancerState.set('autoSave.timeout', null);
+        }
+        saveInputContent();
+    };
+    const onBeforeUnload = () => {
+        // Best-effort save on hard unload (browser close / tab close)
+        const pending = enhancerState.get('autoSave.timeout');
+        if (pending) {
+            clearTimeout(pending);
+            enhancerState.set('autoSave.timeout', null);
+        }
+        saveInputContent();
+    };
     document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('beforeunload', onBeforeUnload);
     enhancerState.addCleanup(() => document.removeEventListener('visibilitychange', onVisibility));
+    enhancerState.addCleanup(() => window.removeEventListener('pagehide', onPageHide));
+    enhancerState.addCleanup(() => window.removeEventListener('beforeunload', onBeforeUnload));
 
     console.log('Event listeners initialized with cleanup');
 }
@@ -579,11 +601,15 @@ function attachAutosave(inputField) {
     enhancerState.set('autoSave.lastInputField', inputField);
     inputField.addEventListener('input', handleAutosaveInput);
     inputField.addEventListener('keyup', handleAutosaveInput);
+    // Save when the field loses focus (e.g., user switches tabs/windows)
+    const onBlur = () => saveInputContent();
+    inputField.addEventListener('blur', onBlur);
     
     // Add cleanup for these listeners
     enhancerState.addCleanup(() => {
         inputField.removeEventListener('input', handleAutosaveInput);
         inputField.removeEventListener('keyup', handleAutosaveInput);
+        inputField.removeEventListener('blur', onBlur);
     });
 }
 
