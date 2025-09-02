@@ -306,6 +306,25 @@ const eventCoordinator = new EventCoordinator();
 
 // Context menu functionality removed as requested by user
 
+// Utility: robustly compute a visible selection rectangle
+function getSelectionBoundingRect(range) {
+    try {
+        if (!range) return null;
+        const rect = range.getBoundingClientRect();
+        if (rect && rect.width > 0 && rect.height > 0) return rect;
+        const rects = Array.from(range.getClientRects?.() || []);
+        const visible = rects.filter(r => r.width > 0 && r.height > 0);
+        if (visible.length === 0) return null;
+        const top = Math.min(...visible.map(r => r.top));
+        const left = Math.min(...visible.map(r => r.left));
+        const right = Math.max(...visible.map(r => r.right));
+        const bottom = Math.max(...visible.map(r => r.bottom));
+        return { top, left, right, bottom, width: right - left, height: bottom - top };
+    } catch (_) {
+        return null;
+    }
+}
+
 // Improved and more reliable AI response detection
 function isSelectionFromAIResponse(selection) {
     if (!selection || selection.rangeCount === 0) return false;
@@ -347,48 +366,19 @@ function isSelectionFromAIResponse(selection) {
         element = element.parentElement;
     }
     
-    // Relaxed proximity rules: only block if the selection actually overlaps
-    // any visible input-like element. This avoids false negatives.
-    try {
-        const selectionRect = range.getBoundingClientRect();
-        if (selectionRect.width === 0 || selectionRect.height === 0) {
-            console.log('❌ Selection has no visible dimensions');
-            return false;
-        }
-        const visibleInputs = document.querySelectorAll(
-            'textarea, input, [contenteditable="true"], [role="textbox"]'
-        );
-        for (const input of visibleInputs) {
-            if (input.offsetParent === null || !input.getBoundingClientRect) continue;
-            const r = input.getBoundingClientRect();
-            if (r.width === 0 || r.height === 0) continue;
-            const overlap = !(
-                selectionRect.right < r.left ||
-                selectionRect.left > r.right ||
-                selectionRect.bottom < r.top ||
-                selectionRect.top > r.bottom
-            );
-            if (overlap) {
-                console.log('❌ Selection overlaps with an input area');
-                return false;
-            }
-        }
-    } catch (error) {
-        console.warn('Error in proximity check:', error);
-        // Continue with other checks if proximity check fails
+    // Require a visible selection rectangle; do not reject due to incidental
+    // overlap with the bottom input bar (common with long list items).
+    const selectionRect = getSelectionBoundingRect(range);
+    if (!selectionRect || selectionRect.width === 0 || selectionRect.height === 0) {
+        console.log('❌ Selection has no visible dimensions');
+        return false;
     }
     
-    // Much more permissive content validation - allow almost any reasonable text
-    const isValidText = (
-        // Contains letters and basic punctuation
-        /[a-zA-Z]/i.test(selectedText) &&
-        // Not just random characters or numbers
-        !/^[\d\s\W]*$/.test(selectedText) &&
-        // Not just whitespace or single characters repeated
-        !/^(.)\1*$/.test(selectedText.trim()) &&
-        // Contains at least one word character
-        /\w/.test(selectedText)
-    );
+    // Unicode-friendly content validation
+    const hasAlphaNum = /[\p{L}\p{N}]/u.test(selectedText);
+    const onlyPunctOrSymbols = /^[\p{P}\p{S}\s]+$/u.test(selectedText);
+    const notSingleCharRepeat = !/^(.)\1*$/.test(selectedText.trim());
+    const isValidText = hasAlphaNum && !onlyPunctOrSymbols && notSingleCharRepeat;
     
     if (isValidText) {
         console.log('✅ Selection contains valid text content');
@@ -554,10 +544,8 @@ function initializeEventListeners() {
     console.log('Event listeners initialized with cleanup');
 }
 
-// Initialize event listeners only if not on excluded paths
-if (!isExcludedPath()) {
-    initializeEventListeners();
-}
+// Initialize event listeners unconditionally; handlers will guard excluded paths
+initializeEventListeners();
 
 // --- AUTOSAVE FEATURE ---
 const AUTOSAVE_STORAGE_KEY = 'autosavedContent_gemini';
@@ -775,9 +763,11 @@ function hookHistoryEvents() {
 }
 
 function isExcludedPath() {
+    // Exclude exactly these paths only:
+    // - https://gemini.google.com/scheduled
+    // - https://gemini.google.com/apps (exact, no subpaths)
     const pathname = window.location.pathname;
-    const excludedPaths = ['/u/1/apps', '/u/1/saved-info'];
-    return excludedPaths.some(path => pathname.startsWith(path));
+    return pathname === '/scheduled' || pathname === '/apps';
 }
 
 if (!isExcludedPath()) {
@@ -849,10 +839,10 @@ function updateButtonPosition() {
     
     try {
         const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
+        const rect = getSelectionBoundingRect(range);
         
         // Skip if selection is not visible
-        if (rect.width === 0 || rect.height === 0) return;
+        if (!rect || rect.width === 0 || rect.height === 0) return;
         
     // Get container dimensions dynamically
     const containerWidth = followUpButton.offsetWidth || 320;
@@ -914,6 +904,13 @@ function handleAnyScroll() {
 }
 
 function handleTextSelection(event) {
+    // Respect excluded pages
+    if (isExcludedPath()) {
+        // Ensure any existing button is removed when on excluded page
+        const existing = enhancerState.get('followUp.button');
+        if (existing) removeFollowUpButton();
+        return;
+    }
     console.log('📝 handleTextSelection called with event:', event.type, 'target:', event.target?.tagName);
     
     // Clear any existing timeout
@@ -970,10 +967,10 @@ function handleTextSelection(event) {
                 // Create new button - ensure we have a valid range first
                 if (selection.rangeCount > 0) {
                     const range = selection.getRangeAt(0);
-                    const rect = range.getBoundingClientRect();
+                    const rect = getSelectionBoundingRect(range);
                     
                     // More lenient visibility check
-                    if (rect.width > 0 && rect.height > 0 && rect.top > -50 && rect.left > -50) {
+                    if (rect && rect.width > 0 && rect.height > 0 && rect.top > -50 && rect.left > -50) {
                         lastSelectedText = selectedText;
                         enhancerState.set('followUp.selectedText', selectedText);
                         console.log('📝 Creating new follow-up button');
@@ -1151,9 +1148,9 @@ function createFollowUpButton(text) {
     const selection = window.getSelection();
     if (selection.rangeCount > 0) {
         const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
+        const rect = getSelectionBoundingRect(range);
         
-        if (rect.width > 0 && rect.height > 0) {
+        if (rect && rect.width > 0 && rect.height > 0) {
             const containerWidth = followUpButton.offsetWidth || 320;
             const containerHeight = followUpButton.offsetHeight || 48;
             const margin = 8;
