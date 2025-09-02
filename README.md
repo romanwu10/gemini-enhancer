@@ -73,7 +73,7 @@ Click the extension icon to open the Slash Commands manager where you can:
 1. Download or clone this repository (or use the link above: [Download ZIP](https://github.com/romanwu10/gemini-enhancer/archive/refs/heads/main.zip))
 2. Open Chrome and go to `chrome://extensions/`
 3. Enable "Developer mode" in the top right
-4. Click "Load unpacked" and select the extension folder
+4. Click "Load unpacked" and select the `extension/` folder
 5. The extension will be active on Gemini
 
 ## Permissions
@@ -95,6 +95,13 @@ The extension consists of:
 - `content.js` - Main functionality for both features
 - `popup.html/js` - Slash command management interface
 - `styles.css` - Styling for UI elements
+
+## Repository Structure
+
+- `extension/` — Load-unpacked Chrome extension (manifest, content script, popup, styles)
+- `docs/PRIVACY_POLICY.md` — Privacy policy
+- `Pictures/` — Store listing images and screenshots
+- `README.md` — Project overview and instructions
 
 ## Version History
 
